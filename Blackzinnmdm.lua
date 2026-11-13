@@ -1,6 +1,6 @@
 
 -- BLACKZINNMDM V3
--- Painel vermelho e preto para Roblox
+-- Painel vermelho e azul para Roblox
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -16,7 +16,7 @@ G.ResetOnSpawn = false
 G.IgnoreGuiInset = false
 G.Parent = PG
 
-local RED = Color3.fromRGB(255,25,25)
+local BLUE = Color3.fromRGB(255,25,25)
 local DARK = Color3.fromRGB(13,2,4)
 local WHITE = Color3.fromRGB(255,255,255)
 local saved = {}
@@ -93,7 +93,7 @@ local panel = frame(G,
 local glow = Instance.new("Frame")
 glow.Size = UDim2.new(1,8,1,8)
 glow.Position = UDim2.fromOffset(-4,-4)
-glow.BackgroundColor3 = RED
+glow.BackgroundColor3 =RBLUE
 glow.BackgroundTransparency = .88
 glow.BorderSizePixel = 0
 glow.ZIndex = 0
@@ -127,19 +127,19 @@ line.BorderSizePixel = 0
 line.Parent = panel
 
 -- Botões
-local b1 = button(panel,"Spawn 1",
+local b1 = button(panel,"SPAWN 1",
     UDim2.fromOffset(135,48),
     UDim2.fromOffset(12,103))
 
-local b2 = button(panel,"Tp 1",
+local b2 = button(panel,"TP 1",
     UDim2.fromOffset(135,48),
     UDim2.fromOffset(163,103))
 
-local b3 = button(panel,"Spawn 2",
+local b3 = button(panel,"SPAWN 2",
     UDim2.fromOffset(135,48),
     UDim2.fromOffset(12,164))
 
-local b4 = button(panel,"Tp 2",
+local b4 = button(panel,"TP 2",
     UDim2.fromOffset(135,48),
     UDim2.fromOffset(163,164))
 
