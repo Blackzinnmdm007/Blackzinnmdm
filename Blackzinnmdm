@@ -1,931 +1,714 @@
 
--- BLACKZINNMDM V12 NEON
--- RADAR OTIMIZADO
--- SEGREDO / ETERNO / DIVINO
+-- BLACKZINNMDM | PAINEL WIDE
+-- Banner Gamer Neon
+-- Interface adaptada para Android
 
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
 local UIS = game:GetService("UserInputService")
+local WS = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local pg = player:WaitForChild("PlayerGui")
 
-if type(_G.BlackzinnStop) == "function" then
-    pcall(_G.BlackzinnStop)
-end
+local IMAGE_ID = "rbxassetid://108595179005623"
 
-for i = 2, 12 do
-    local old = pg:FindFirstChild("BlackzinnV"..i)
-    if old then old:Destroy() end
-end
+local old = pg:FindFirstChild("BlackzinnMDM")
+if old then old:Destroy() end
 
-local oldNeon = pg:FindFirstChild("BlackzinnNeon")
-if oldNeon then oldNeon:Destroy() end
+local BLUE = Color3.fromRGB(0, 150, 255)
+local WHITE = Color3.new(1, 1, 1)
+local DARK = Color3.fromRGB(5, 12, 27)
+local RED = Color3.fromRGB(255, 75, 75)
 
-local running = true
-local connections = {}
-local prompts = {}
-local candidates = {}
-local ignored = {}
+local running = false
+local basePosition = nil
+local attempts = 0
+local routeIndex = 0
+local workerActive = false
 
-local base = nil
-local ready = false
-local busy = false
-local scanDirty = true
-local scanVersion = 0
-
-local cfg = {
+local selected = {
     Segredo = true,
     Eterno = true,
-    Divino = true,
-    Auto = false,
-
-    BaseRadius = 25,
-    SearchInterval = 0.15,
-    CollectDelay = 0.1,
-    CollectWait = 0.25,
-    RefreshInterval = 3,
-    RetryDelay = 12
+    Divino = true
 }
 
--- CORES
-
-local C = {
-    bg = Color3.fromRGB(5,11,23),
-    panel = Color3.fromRGB(11,24,44),
-    blue = Color3.fromRGB(0,170,255),
-    cyan = Color3.fromRGB(0,220,255),
-    white = Color3.fromRGB(235,245,255),
-    muted = Color3.fromRGB(145,165,190),
-    off = Color3.fromRGB(48,58,77),
-    green = Color3.fromRGB(35,230,145)
+local areas = {
+    Vector3.new(24.74,3,6103.70),
+    Vector3.new(23.77,3,5651.26),
+    Vector3.new(25.29,3,5215.19),
+    Vector3.new(24.95,3,4781.72),
+    Vector3.new(26.39,3,4349.01),
+    Vector3.new(24.16,3,3899.66),
+    Vector3.new(24.06,3,3457.70),
+    Vector3.new(25.50,3,2959.96),
+    Vector3.new(20.62,3,2524.49),
+    Vector3.new(20.41,3,2099.99),
+    Vector3.new(23.10,3,1724.55),
+    Vector3.new(17.44,3,1366.67),
+    Vector3.new(3.71,3,1080.96),
+    Vector3.new(57.46,3,749.01),
+    Vector3.new(-7.36,3,470.16),
+    Vector3.new(-5.75,3,461.27),
+    Vector3.new(11.35,3,217.60)
 }
 
-local function make(class, props, parent)
-    local x = Instance.new(class)
-    for k,v in pairs(props) do
-        x[k] = v
+local function new(class, parent, props)
+    local obj = Instance.new(class)
+    for k,v in pairs(props or {}) do
+        obj[k] = v
     end
-    x.Parent = parent
-    return x
+    obj.Parent = parent
+    return obj
 end
 
-local function corner(obj,r)
-    make("UICorner",{
-        CornerRadius = UDim.new(0,r)
-    },obj)
-end
-
-local function stroke(obj,color,width)
-    make("UIStroke",{
-        Color = color or C.blue,
-        Thickness = width or 1
-    },obj)
-end
-
-local function normalize(s)
-    s = tostring(s or ""):lower()
-
-    local accents = {
-        ["á"]="a",["à"]="a",["â"]="a",
-        ["ã"]="a",["é"]="e",["ê"]="e",
-        ["í"]="i",["ó"]="o",["ô"]="o",
-        ["õ"]="o",["ú"]="u",["ç"]="c"
-    }
-
-    for a,b in pairs(accents) do
-        s = s:gsub(a,b)
-    end
-
-    return s
-end
-
-local function contains(s,words)
-    for _,word in ipairs(words) do
-        if s:find(word,1,true) then
-            return true
-        end
-    end
-    return false
-end
-
-local function root()
-    local c = player.Character
-    return c and c:FindFirstChild(
-        "HumanoidRootPart"
-    )
-end
-
-local function teleport(cf)
-    local c = player.Character
-    if not c or not cf then return false end
-    c:PivotTo(cf)
-    return true
-end
-
-local function position(obj)
-    local x = obj
-
-    while x do
-        if x:IsA("Attachment") then
-            return x.WorldPosition
-        end
-
-        if x:IsA("BasePart") then
-            return x.Position
-        end
-
-        x = x.Parent
-    end
-
-    return nil
-end
-
-local function nearBase(p)
-    if not base or not p then return false end
-
-    local a = Vector3.new(p.X,0,p.Z)
-    local b = Vector3.new(
-        base.Position.X,0,base.Position.Z
-    )
-
-    return (a-b).Magnitude <= cfg.BaseRadius
-end
-
-local function textOf(obj)
-    if not obj then return "" end
-
-    local parts = {obj.Name}
-
-    if obj:IsA("ProximityPrompt") then
-        table.insert(parts,obj.ActionText)
-        table.insert(parts,obj.ObjectText)
-    elseif obj:IsA("TextLabel")
-        or obj:IsA("TextButton") then
-        table.insert(parts,obj.Text)
-    end
-
-    for _,key in ipairs({
-        "Rarity","Raridade",
-        "EggRarity","EggType"
-    }) do
-        local value = obj:GetAttribute(key)
-        if value ~= nil then
-            table.insert(parts,tostring(value))
-        end
-    end
-
-    return normalize(table.concat(parts," "))
-end
-
-local function forbidden(obj)
-    local x = obj
-
-    while x and x ~= Workspace do
-        if contains(normalize(x.Name),{
-            "equipped","equipado",
-            "followers","petfollowers",
-            "activepets","incubator",
-            "chocadeira","hatching",
-            "chocando","incubando"
-        }) then
-            return true
-        end
-
-        for _,key in ipairs({
-            "Equipped","IsEquipped",
-            "Following","IsHatching",
-            "IsIncubating"
-        }) do
-            if x:GetAttribute(key) == true then
-                return true
-            end
-        end
-
-        x = x.Parent
-    end
-
-    return false
-end
-
-local function isEggPrompt(prompt)
-    return contains(textOf(prompt),{
-        "coletar ovo","collect egg",
-        "pegar ovo","pickup egg"
+local function corner(obj, radius)
+    new("UICorner", obj, {
+        CornerRadius = UDim.new(0, radius or 9)
     })
 end
 
--- CLASSIFICACAO EXCLUSIVA
-
-local function classify(text)
-    text = normalize(text)
-
-    if contains(text,{
-        "cosmico","cosmic",
-        "mitico","mythic",
-        "lendario","legendary",
-        "epico","epic",
-        "comum","common",
-        "raro","rare"
-    }) then
-        return "BLOCK"
-    end
-
-    if contains(text,{"segredo","secret"}) then
-        return "Segredo"
-    end
-
-    if contains(text,{"eterno","eternal"}) then
-        return "Eterno"
-    end
-
-    if contains(text,{
-        "divino","divina","divine"
-    }) then
-        return "Divino"
-    end
-
-    return nil
+local function outline(obj, thickness)
+    new("UIStroke", obj, {
+        Color = BLUE,
+        Thickness = thickness or 1.5
+    })
 end
 
-local function eggModel(prompt)
-    local x = prompt.Parent
-
-    while x and x ~= Workspace do
-        if x:IsA("Model") then
-            return x
-        end
-        x = x.Parent
-    end
-
-    return nil
-end
-
--- DETECTAR RARIDADE DO PROPRIO OVO
-
-local function detect(prompt)
-    local model = eggModel(prompt)
-
-    if not model or forbidden(model) then
-        return nil
-    end
-
-    local found = {}
-    local blocked = false
-
-    local function check(value)
-        local result = classify(value)
-
-        if result == "BLOCK" then
-            blocked = true
-        elseif result then
-            found[result] = true
-        end
-    end
-
-    check(textOf(prompt))
-    check(textOf(model))
-
-    local count = 0
-
-    for _,obj in ipairs(
-        model:GetDescendants()
-    ) do
-        count = count + 1
-
-        if obj:IsA("TextLabel")
-            or obj:IsA("TextButton")
-            or obj:IsA("StringValue") then
-
-            check(textOf(obj))
-
-            if obj:IsA("StringValue") then
-                check(obj.Value)
-            end
-        end
-
-        if count >= 350 then break end
-    end
-
-    if blocked then return nil end
-
-    local selected
-    local total = 0
-
-    for rarity in pairs(found) do
-        selected = rarity
-        total = total + 1
-    end
-
-    if total ~= 1 then return nil end
-    if not cfg[selected] then return nil end
-
-    return selected
-end
-
--- INTERFACE NEON
-
-local gui = make("ScreenGui",{
-    Name = "BlackzinnV12",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true
-},pg)
-
-local panel = make("Frame",{
-    Size = UDim2.fromOffset(570,350),
-    Position = UDim2.new(0.5,-285,0.5,-175),
-    BackgroundColor3 = C.bg,
-    BorderSizePixel = 0,
-    Active = true,
-    Draggable = true
-},gui)
-
-corner(panel,16)
-stroke(panel,C.cyan,2)
-
-local scale = make("UIScale",{
-    Scale = 0.82
-},panel)
-
-local function fit()
-    local cam = Workspace.CurrentCamera
-    if not cam then return end
-
-    local v = cam.ViewportSize
-
-    scale.Scale = math.clamp(
-        math.min(v.X/630,v.Y/410),
-        0.48,1
-    )
-end
-
-fit()
-
-local header = make("Frame",{
-    Size = UDim2.new(1,-16,0,57),
-    Position = UDim2.fromOffset(8,7),
-    BackgroundColor3 = C.panel,
-    BorderSizePixel = 0
-},panel)
-
-corner(header,12)
-stroke(header,C.blue,1)
-
-make("TextLabel",{
-    Size = UDim2.new(1,-55,0,31),
-    Position = UDim2.fromOffset(12,3),
-    BackgroundTransparency = 1,
-    Text = "♛ BLACKZINNMDM V12",
-    TextColor3 = C.cyan,
-    Font = Enum.Font.GothamBold,
-    TextSize = 21,
-    TextXAlignment = Enum.TextXAlignment.Left
-},header)
-
-make("TextLabel",{
-    Size = UDim2.new(1,-55,0,18),
-    Position = UDim2.fromOffset(14,33),
-    BackgroundTransparency = 1,
-    Text = "RADAR DE OVOS • NEON EDITION",
-    TextColor3 = C.white,
-    Font = Enum.Font.Gotham,
-    TextSize = 10,
-    TextXAlignment = Enum.TextXAlignment.Left
-},header)
-
-local close = make("TextButton",{
-    Size = UDim2.fromOffset(37,37),
-    Position = UDim2.new(1,-44,0,9),
-    BackgroundColor3 = C.bg,
-    Text = "×",
-    TextColor3 = C.cyan,
-    Font = Enum.Font.GothamBold,
-    TextSize = 27
-},header)
-
-corner(close,9)
-stroke(close,C.blue,1)
-
-local sidebar = make("Frame",{
-    Size = UDim2.fromOffset(145,268),
-    Position = UDim2.fromOffset(8,73),
-    BackgroundColor3 = C.panel,
-    BorderSizePixel = 0
-},panel)
-
-corner(sidebar,12)
-stroke(sidebar,C.blue,1)
-
-local content = make("Frame",{
-    Size = UDim2.new(1,-169,1,-82),
-    Position = UDim2.fromOffset(161,73),
-    BackgroundColor3 = C.panel,
-    BorderSizePixel = 0
-},panel)
-
-corner(content,12)
-stroke(content,C.blue,1)
-
-local pages = {}
-local navButtons = {}
-
-for _,name in ipairs({
-    "Principal","Configurações",
-    "Status","Créditos"
-}) do
-    pages[name] = make("Frame",{
-        Size = UDim2.new(1,0,1,0),
+local function text(parent, value, pos, size, fontSize)
+    return new("TextLabel", parent, {
+        Position = pos,
+        Size = size,
         BackgroundTransparency = 1,
-        Visible = false
-    },content)
+        Text = value,
+        TextColor3 = WHITE,
+        TextStrokeTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        TextSize = fontSize or 13,
+        TextWrapped = true,
+        ZIndex = 5
+    })
 end
 
-local function label(parent,text,x,y,w,h,size,color)
-    return make("TextLabel",{
-        Position = UDim2.fromOffset(x,y),
-        Size = UDim2.fromOffset(w,h),
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = color or C.white,
+local function button(parent, value, pos, size)
+    local b = new("TextButton", parent, {
+        Position = pos,
+        Size = size,
+        BackgroundColor3 = DARK,
+        BackgroundTransparency = 0.08,
+        Text = value,
+        TextColor3 = WHITE,
+        TextStrokeTransparency = 1,
         Font = Enum.Font.GothamBold,
-        TextSize = size or 14,
-        TextXAlignment = Enum.TextXAlignment.Left
-    },parent)
-end
-
-local function button(parent,text,x,y,w,h,fn)
-    local b = make("TextButton",{
-        Position = UDim2.fromOffset(x,y),
-        Size = UDim2.fromOffset(w,h),
-        BackgroundColor3 = C.bg,
-        TextColor3 = C.white,
-        Text = text,
-        Font = Enum.Font.GothamBold,
-        TextSize = 13
-    },parent)
-
-    corner(b,8)
-    stroke(b,C.blue,1)
-
-    b.MouseButton1Click:Connect(function()
-        fn(b)
-    end)
-
+        TextSize = 12,
+        Active = true,
+        ZIndex = 7
+    })
+    corner(b, 9)
+    outline(b)
     return b
 end
 
-local function showPage(name)
-    for n,page in pairs(pages) do
-        page.Visible = (n == name)
-    end
+local gui = new("ScreenGui", pg, {
+    Name = "BlackzinnMDM",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 100
+})
 
-    for n,b in pairs(navButtons) do
-        b.BackgroundColor3 =
-            n == name
-            and Color3.fromRGB(0,80,160)
-            or C.bg
-    end
-end
+-- PAINEL RESPONSIVO
 
-local nav = {
-    {"⌂  Principal","Principal"},
-    {"⚙  Configurações","Configurações"},
-    {"▥  Status","Status"},
-    {"ⓘ  Créditos","Créditos"}
+local panel = new("Frame", gui, {
+    AnchorPoint = Vector2.new(0.5,0.5),
+    Position = UDim2.fromScale(0.5,0.5),
+    Size = UDim2.new(0.94,0,0.83,0),
+    BackgroundColor3 = DARK,
+    ClipsDescendants = true,
+    ZIndex = 1
+})
+corner(panel, 13)
+outline(panel, 2)
+
+new("UISizeConstraint", panel, {
+    MaxSize = Vector2.new(1050,650),
+    MinSize = Vector2.new(280,240)
+})
+
+-- FUNDO ESCURO
+
+new("ImageLabel", panel, {
+    Size = UDim2.fromScale(1,1),
+    BackgroundTransparency = 1,
+    Image = IMAGE_ID,
+    ImageTransparency = 0.45,
+    ScaleType = Enum.ScaleType.Crop,
+    ZIndex = 1
+})
+
+new("Frame", panel, {
+    Size = UDim2.fromScale(1,1),
+    BackgroundColor3 = Color3.new(0,0,0),
+    BackgroundTransparency = 0.3,
+    BorderSizePixel = 0,
+    ZIndex = 2
+})
+
+-- BANNER SUPERIOR
+
+local banner = new("ImageLabel", panel, {
+    Position = UDim2.fromScale(0,0),
+    Size = UDim2.new(1,0,0.27,0),
+    BackgroundColor3 = DARK,
+    Image = IMAGE_ID,
+    ScaleType = Enum.ScaleType.Crop,
+    ZIndex = 3
+})
+
+local bannerShade = new("Frame", banner, {
+    Size = UDim2.fromScale(1,1),
+    BackgroundColor3 = Color3.new(0,0,0),
+    BackgroundTransparency = 0.75,
+    BorderSizePixel = 0,
+    ZIndex = 4
+})
+
+local bannerTitle = text(
+    banner,
+    "BLACKZINNMDM",
+    UDim2.new(0.24,0,0.72,0),
+    UDim2.new(0.52,0,0.22,0),
+    16
+)
+bannerTitle.ZIndex = 5
+
+local close = button(
+    banner, "×",
+    UDim2.new(1,-36,0,7),
+    UDim2.fromOffset(29,29)
+)
+close.TextSize = 23
+
+-- ABAS
+
+local tabBar = new("Frame", panel, {
+    Position = UDim2.new(0,8,0.28,0),
+    Size = UDim2.new(1,-16,0.105,0),
+    BackgroundTransparency = 1,
+    ZIndex = 5
+})
+
+local pages = {}
+local tabButtons = {}
+
+local tabNames = {
+    "Principal",
+    "Configurações",
+    "Status",
+    "Créditos"
 }
 
-for i,item in ipairs(nav) do
-    navButtons[item[2]] = button(
-        sidebar,item[1],
-        9,14+(i-1)*52,127,42,
-        function()
-            showPage(item[2])
-        end
+for i,name in ipairs(tabNames) do
+    local b = button(
+        tabBar,
+        name,
+        UDim2.new((i-1)/4,2,0,0),
+        UDim2.new(0.25,-4,1,0)
     )
+    b.TextScaled = true
+    new("UITextSizeConstraint", b, {
+        MaxTextSize = 13,
+        MinTextSize = 8
+    })
+    tabButtons[name] = b
+
+    pages[name] = new("Frame", panel, {
+        Position = UDim2.new(0,10,0.40,0),
+        Size = UDim2.new(1,-20,0.57,0),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ZIndex = 4
+    })
 end
 
--- PAGINA PRINCIPAL
-
-local main = pages["Principal"]
-
-label(main,"⌂  PRINCIPAL",
-    13,9,250,26,18,C.cyan)
-
-make("Frame",{
-    Position = UDim2.fromOffset(13,39),
-    Size = UDim2.new(1,-26,0,2),
-    BackgroundColor3 = C.blue,
-    BorderSizePixel = 0
-},main)
-
-label(main,"RARIDADES (RADAR)",
-    13,48,190,24,13,C.cyan)
-
-label(main,"AÇÕES",
-    217,48,170,24,13,C.cyan)
-
-local function toggle(name,y)
-    local b
-
-    b = button(
-        main,name.."  ● ON",
-        13,y,190,39,
-        function(btn)
-            cfg[name] = not cfg[name]
-            scanDirty = true
-
-            btn.Text = name.."  "..
-                (cfg[name] and "● ON" or "○ OFF")
-
-            btn.TextColor3 = cfg[name]
-                and C.cyan or C.muted
-        end
-    )
-
-    b.TextColor3 = C.cyan
+local function openTab(name)
+    for n,page in pairs(pages) do
+        page.Visible = (n == name)
+        tabButtons[n].BackgroundColor3 =
+            n == name
+            and Color3.fromRGB(0,75,150)
+            or DARK
+    end
 end
 
-toggle("Segredo",77)
-toggle("Eterno",122)
-toggle("Divino",167)
+for name,b in pairs(tabButtons) do
+    b.Activated:Connect(function()
+        openTab(name)
+    end)
+end
 
-local radarStatus = label(
-    main,"Preparando radar...",
-    13,218,385,30,12,C.white
+-- ABA PRINCIPAL EM DUAS COLUNAS
+
+local main = pages.Principal
+
+local left = new("Frame", main, {
+    Size = UDim2.new(0.52,-5,1,0),
+    BackgroundColor3 = DARK,
+    BackgroundTransparency = 0.2,
+    ZIndex = 4
+})
+corner(left,10)
+outline(left)
+
+local right = new("Frame", main, {
+    Position = UDim2.new(0.53,0,0,0),
+    Size = UDim2.new(0.47,0,1,0),
+    BackgroundColor3 = DARK,
+    BackgroundTransparency = 0.2,
+    ZIndex = 4
+})
+corner(right,10)
+outline(right)
+
+local stateLabel = text(
+    left,
+    "AUTO FARM: OFF",
+    UDim2.new(0.04,0,0.06,0),
+    UDim2.new(0.92,0,0.18,0),
+    15
 )
 
-radarStatus.TextWrapped = true
-
-button(main,"⌖  SALVAR BASE",
-    217,77,179,39,function()
-        local r = root()
-
-        if r then
-            base = r.CFrame
-            scanDirty = true
-            radarStatus.Text = "Base salva!"
-        end
-    end
+local saveBase = button(
+    left,
+    "SALVAR BASE",
+    UDim2.new(0.06,0,0.30,0),
+    UDim2.new(0.88,0,0.18,0)
 )
 
-button(main,"➤  TP BASE",
-    217,122,179,39,function()
-        if base then teleport(base) end
-    end
+local baseLabel = text(
+    left,
+    "BASE: NÃO SALVA",
+    UDim2.new(0.05,0,0.53,0),
+    UDim2.new(0.90,0,0.15,0),
+    12
 )
 
-button(main,"▶  AUTO FARM: OFF",
-    217,167,179,39,function(b)
-        if not base then
-            radarStatus.Text = "Salve sua base primeiro"
-            return
-        end
-
-        if not ready then
-            radarStatus.Text = "Radar carregando..."
-            return
-        end
-
-        cfg.Auto = not cfg.Auto
-
-        b.Text = cfg.Auto
-            and "■  AUTO FARM: ON"
-            or "▶  AUTO FARM: OFF"
-
-        b.TextColor3 = cfg.Auto
-            and C.cyan or C.white
-
-        radarStatus.Text = cfg.Auto
-            and "Radar rápido ativado!"
-            or "Auto Farm desligado"
-    end
+text(
+    left,
+    "Use o botão flutuante INICIAR / TERMINAR para controlar a busca.",
+    UDim2.new(0.06,0,0.72,0),
+    UDim2.new(0.88,0,0.23,0),
+    11
 )
 
--- CONFIGURACOES
+text(
+    right,
+    "Ⓑ INFORMAÇÕES",
+    UDim2.new(0.04,0,0.07,0),
+    UDim2.new(0.92,0,0.17,0),
+    15
+)
 
-local settings = pages["Configurações"]
+local areaLabel = text(
+    right,
+    "ÁREAS DA ROTA: 17",
+    UDim2.new(0.04,0,0.30,0),
+    UDim2.new(0.92,0,0.15,0),
+    12
+)
 
-label(settings,"⚙  CONFIGURAÇÕES",
-    13,12,380,30,18,C.cyan)
+local eggLabel = text(
+    right,
+    "TENTATIVAS DE COLETA: 0",
+    UDim2.new(0.04,0,0.51,0),
+    UDim2.new(0.92,0,0.15,0),
+    11
+)
 
-label(settings,"Radar: Workspace carregado",
-    13,58,380,25,13)
+local statusLabel = text(
+    right,
+    "STATUS: AGUARDANDO",
+    UDim2.new(0.04,0,0.73,0),
+    UDim2.new(0.92,0,0.15,0),
+    11
+)
 
-label(settings,"Busca: 0.15 segundo",
-    13,92,380,25,13)
+-- CONFIGURAÇÕES
 
-label(settings,"Coleta: 0.1 segundo",
-    13,126,380,25,13)
+local config = pages["Configurações"]
 
-label(settings,"Proteção da base: 25 studs",
-    13,160,380,25,13)
+text(
+    config,
+    "SELECIONE AS RARIDADES",
+    UDim2.new(0,0,0,0),
+    UDim2.new(1,0,0.18,0),
+    15
+)
 
-label(settings,"Somente raridades confirmadas",
-    13,198,380,25,12,C.cyan)
+local rarityButtons = {}
+
+local function updateRarity(name)
+    local b = rarityButtons[name]
+    b.Text = name:upper() ..
+        (selected[name] and "  [ON]" or "  [OFF]")
+    b.BackgroundColor3 = selected[name]
+        and Color3.fromRGB(0,65,120)
+        or DARK
+end
+
+for i,name in ipairs({"Segredo","Eterno","Divino"}) do
+    local b = button(
+        config,
+        "",
+        UDim2.new(0.12,0,0.22+(i-1)*0.24,0),
+        UDim2.new(0.76,0,0.19,0)
+    )
+    rarityButtons[name] = b
+    updateRarity(name)
+
+    b.Activated:Connect(function()
+        selected[name] = not selected[name]
+        updateRarity(name)
+    end)
+end
 
 -- STATUS
 
-local statusPage = pages["Status"]
+local statusPage = pages.Status
 
-label(statusPage,"▥  STATUS DO RADAR",
-    13,12,380,30,18,C.cyan)
-
-local statusDetail = label(
+local statusDetails = text(
     statusPage,
-    "Aguardando radar...",
-    13,60,380,175,13,C.white
+    "AUTO FARM DESLIGADO",
+    UDim2.new(0.05,0,0.05,0),
+    UDim2.new(0.90,0,0.25,0),
+    15
 )
 
-statusDetail.TextWrapped = true
-statusDetail.TextYAlignment = Enum.TextYAlignment.Top
+local routeDetails = text(
+    statusPage,
+    "ROTA: 0/17",
+    UDim2.new(0.05,0,0.35,0),
+    UDim2.new(0.90,0,0.20,0),
+    14
+)
 
--- CREDITOS
+local attemptDetails = text(
+    statusPage,
+    "TENTATIVAS DE COLETA: 0",
+    UDim2.new(0.05,0,0.65,0),
+    UDim2.new(0.90,0,0.20,0),
+    13
+)
+
+-- CRÉDITOS
 
 local credits = pages["Créditos"]
 
-label(credits,"ⓘ  CRÉDITOS",
-    13,12,380,30,18,C.cyan)
+local creditImage = new("ImageLabel", credits, {
+    Position = UDim2.new(0.05,0,0.1,0),
+    Size = UDim2.new(0.35,0,0.75,0),
+    BackgroundTransparency = 1,
+    Image = IMAGE_ID,
+    ScaleType = Enum.ScaleType.Crop,
+    ZIndex = 5
+})
+corner(creditImage,9)
+outline(creditImage)
 
-label(credits,"BLACKZINNMDM V12",
-    13,70,380,30,18,C.white)
+local creditText = {
+    "BLACKZINNMDM",
+    "Desenvolvedor: BlackzinnMDM/ChatGpt",
+    "Versao: Script Oficial",
+    "Edicao: Estavel",
+    "Funcao: Auto Farm de Ovos"
+}
 
-label(credits,"NEON EDITION",
-    13,110,380,25,14,C.cyan)
-
-label(credits,"Radar rápido de ovos",
-    13,150,380,25,13,C.white)
-
-showPage("Principal")
-
--- ICONE B
-
-local icon = make("TextButton",{
-    Size = UDim2.fromOffset(48,48),
-    Position = UDim2.new(0,12,0.14,0),
-    BackgroundColor3 = C.bg,
-    Text = "B",
-    TextColor3 = C.cyan,
-    Font = Enum.Font.GothamBold,
-    TextSize = 28,
-    Active = true,
-    Draggable = true
-},gui)
-
-corner(icon,10)
-stroke(icon,C.cyan,2)
-
-local function togglePanel()
-    panel.Visible = not panel.Visible
-end
-
-icon.MouseButton1Click:Connect(togglePanel)
-close.MouseButton1Click:Connect(togglePanel)
-
--- INDEXACAO DE PROMPTS
-
-local function register(obj)
-    if obj:IsA("ProximityPrompt") then
-        prompts[obj] = true
-        scanDirty = true
-    end
-end
-
-local function unregister(obj)
-    prompts[obj] = nil
-    candidates[obj] = nil
-    ignored[obj] = nil
-    scanDirty = true
-end
-
-table.insert(connections,
-    Workspace.DescendantAdded:Connect(register)
-)
-
-table.insert(connections,
-    Workspace.DescendantRemoving:Connect(unregister)
-)
-
-task.spawn(function()
-    for i,obj in ipairs(
-        Workspace:GetDescendants()
-    ) do
-        if not running then return end
-
-        register(obj)
-
-        if i%200 == 0 then
-            task.wait()
-        end
-    end
-
-    ready = true
-    scanDirty = true
-    radarStatus.Text = "Radar V12 pronto!"
-end)
-
--- ATUALIZAR FILA DE CANDIDATOS
-
-local function refreshCandidates()
-    local newCandidates = {}
-    local total = 0
-    local eggPrompts = 0
-    local valid = 0
-
-    for prompt in pairs(prompts) do
-        if not running then return end
-
-        total = total + 1
-
-        if prompt.Parent
-            and prompt.Enabled
-            and isEggPrompt(prompt)
-            and not forbidden(prompt) then
-
-            eggPrompts = eggPrompts + 1
-
-            local p = position(prompt)
-
-            if p and not nearBase(p) then
-                local rarity = detect(prompt)
-
-                if rarity then
-                    valid = valid + 1
-                    newCandidates[prompt] = rarity
-                end
-            end
-        end
-
-        if total%35 == 0 then
-            task.wait()
-        end
-    end
-
-    candidates = newCandidates
-
-    statusDetail.Text =
-        "Prompts indexados: "..total..
-        "\nInterações de ovo: "..eggPrompts..
-        "\nOvos válidos: "..valid..
-        "\nRadar: Segredo / Eterno / Divino"..
-        "\nBusca rápida: 0.15s"
-
-    scanDirty = false
-end
-
--- SELECIONAR OVO MAIS PROXIMO
-
-local function nextEgg()
-    local r = root()
-    if not r then return nil end
-
-    local best
-    local bestDistance = math.huge
-
-    for prompt,rarity in pairs(candidates) do
-        if prompt.Parent
-            and prompt.Enabled
-            and not forbidden(prompt)
-            and not ignored[prompt] then
-
-            local p = position(prompt)
-
-            if p and not nearBase(p)
-                and cfg[rarity] then
-
-                local distance =
-                    (p-r.Position).Magnitude
-
-                if distance < bestDistance then
-                    bestDistance = distance
-
-                    best = {
-                        prompt = prompt,
-                        rarity = rarity
-                    }
-                end
-            end
-        end
-    end
-
-    return best
-end
-
--- COLETAR
-
-local function collect(target)
-    busy = true
-
-    local prompt = target.prompt
-    local p = position(prompt)
-
-    if not p or not prompt.Parent
-        or not prompt.Enabled
-        or not isEggPrompt(prompt)
-        or forbidden(prompt)
-        or nearBase(p) then
-
-        busy = false
-        return
-    end
-
-    local rarity = detect(prompt)
-
-    if rarity ~= target.rarity then
-        candidates[prompt] = nil
-        busy = false
-        return
-    end
-
-    radarStatus.Text =
-        "Teleportando: "..rarity
-
-    teleport(
-        CFrame.new(p+Vector3.new(0,2,0))
+for i,line in ipairs(creditText) do
+    text(
+        credits,
+        line,
+        UDim2.new(0.43,0,0.03+(i-1)*0.19,0),
+        UDim2.new(0.55,0,0.17,0),
+        i==1 and 15 or 11
     )
+end
 
-    task.wait(cfg.CollectDelay)
+-- ÍCONE FLUTUANTE
 
-    if not running or not cfg.Auto then
-        if base then teleport(base) end
-        busy = false
+local floating = new("ImageButton", gui, {
+    Size = UDim2.fromOffset(44,44),
+    Position = UDim2.new(0,8,0.17,0),
+    BackgroundColor3 = DARK,
+    Image = IMAGE_ID,
+    ScaleType = Enum.ScaleType.Crop,
+    Active = true,
+    ZIndex = 20
+})
+corner(floating,9)
+outline(floating)
+
+floating.Activated:Connect(function()
+    panel.Visible = not panel.Visible
+end)
+
+close.Activated:Connect(function()
+    panel.Visible = false
+end)
+
+-- BOTÃO INICIAR / TERMINAR
+-- Sem arraste sobre a área de toque
+
+local toggle = button(
+    gui,
+    "INICIAR",
+    UDim2.new(1,-105,0.45,0),
+    UDim2.fromOffset(96,48)
+)
+toggle.ZIndex = 25
+
+-- PERSONAGEM
+
+local function getRoot()
+    local char = player.Character
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function teleport(pos)
+    local char = player.Character
+    if char and char.Parent then
+        char:PivotTo(CFrame.new(pos))
+        return true
+    end
+    return false
+end
+
+saveBase.Activated:Connect(function()
+    local root = getRoot()
+    if root then
+        basePosition = root.Position
+        baseLabel.Text = "BASE: SALVA"
+        statusLabel.Text = "STATUS: BASE SALVA"
+    end
+end)
+
+-- BUSCA DOS OVOS
+
+local function normalize(value)
+    local s = tostring(value or ""):lower()
+    return s:gsub("á","a")
+        :gsub("é","e")
+        :gsub("í","i")
+        :gsub("ó","o")
+        :gsub("ú","u")
+end
+
+local function rarityOf(obj)
+    local parts = {
+        normalize(obj.Name),
+        normalize(obj:GetAttribute("Rarity")),
+        normalize(obj:GetAttribute("Raridade"))
+    }
+
+    for _,d in ipairs(obj:GetDescendants()) do
+        if d:IsA("TextLabel") then
+            table.insert(parts,normalize(d.Text))
+        elseif d:IsA("StringValue") then
+            table.insert(parts,normalize(d.Value))
+        end
+    end
+
+    local combined = table.concat(parts," ")
+
+    for _,name in ipairs({"Segredo","Eterno","Divino"}) do
+        if combined:find(normalize(name),1,true) then
+            return name
+        end
+    end
+
+    return nil
+end
+
+local function excluded(obj)
+    local current = obj
+
+    while current and current ~= WS do
+        local name = normalize(current.Name)
+
+        if name:find("plant",1,true)
+        or name:find("incubat",1,true)
+        or name:find("equip",1,true)
+        or name:find("pet",1,true)
+        or current:GetAttribute("Planted") == true
+        or current:GetAttribute("Equipped") == true then
+            return true
+        end
+
+        current = current.Parent
+    end
+
+    return false
+end
+
+local function findEgg()
+    local root = getRoot()
+    if not root then return nil end
+
+    local nearest
+    local distance = math.huge
+
+    for _,obj in ipairs(WS:GetDescendants()) do
+        if obj:IsA("Model") then
+            local name = normalize(obj.Name)
+
+            if name:find("egg",1,true)
+            or name:find("ovo",1,true) then
+                if not excluded(obj) then
+                    local rarity = rarityOf(obj)
+
+                    if rarity and selected[rarity] then
+                        local pos = obj:GetPivot().Position
+
+                        local nearBase = basePosition
+                            and (pos-basePosition).Magnitude < 25
+
+                        if not nearBase then
+                            local prompt = obj:FindFirstChildWhichIsA(
+                                "ProximityPrompt",true
+                            )
+
+                            if prompt then
+                                local d = (pos-root.Position).Magnitude
+
+                                if d < distance then
+                                    distance = d
+                                    nearest = {
+                                        position = pos,
+                                        prompt = prompt,
+                                        rarity = rarity
+                                    }
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nearest
+end
+
+-- CONTROLE DO FARM
+
+local function updateState()
+    stateLabel.Text = running
+        and "AUTO FARM: ON"
+        or "AUTO FARM: OFF"
+
+    toggle.Text = running
+        and "TERMINAR"
+        or "INICIAR"
+
+    toggle.BackgroundColor3 = running
+        and Color3.fromRGB(0,85,155)
+        or DARK
+
+    statusDetails.Text = running
+        and "AUTO FARM LIGADO"
+        or "AUTO FARM DESLIGADO"
+end
+
+local function farmLoop()
+    if workerActive then return end
+    workerActive = true
+
+    while running do
+        for i,pos in ipairs(areas) do
+            if not running then break end
+
+            routeIndex = i
+            routeDetails.Text = "ROTA: "..i.."/17"
+            areaLabel.Text = "ÁREA DA ROTA: "..i.."/17"
+            statusLabel.Text = "STATUS: PROCURANDO"
+
+            teleport(pos)
+            task.wait(0.18)
+
+            local egg = findEgg()
+
+            if egg and running then
+                statusLabel.Text = "STATUS: "..egg.rarity
+
+                teleport(
+                    egg.position + Vector3.new(0,2,0)
+                )
+
+                task.wait(0.12)
+
+                if running and egg.prompt.Parent then
+                    if typeof(fireproximityprompt) == "function" then
+                        pcall(function()
+                            fireproximityprompt(egg.prompt)
+                        end)
+                    else
+                        statusLabel.Text =
+                            "STATUS: PROMPT INDISPONÍVEL"
+                    end
+
+                    attempts = attempts + 1
+                    eggLabel.Text =
+                        "TENTATIVAS DE COLETA: "..attempts
+                    attemptDetails.Text =
+                        "TENTATIVAS DE COLETA: "..attempts
+                end
+
+                if running and basePosition then
+                    teleport(
+                        basePosition + Vector3.new(0,2,0)
+                    )
+                    statusLabel.Text =
+                        "STATUS: AGUARDANDO NA BASE"
+
+                    task.wait(3)
+                end
+            end
+        end
+
+        task.wait()
+    end
+
+    workerActive = false
+    statusLabel.Text = "STATUS: PARADO"
+end
+
+toggle.Activated:Connect(function()
+    if not running and not basePosition then
+        statusLabel.Text = "SALVE SUA BASE PRIMEIRO"
+        openTab("Principal")
         return
     end
 
-    local success = false
+    running = not running
+    updateState()
 
-    if type(fireproximityprompt)
-        == "function" then
-
-        success = pcall(function()
-            fireproximityprompt(prompt)
-        end)
-    end
-
-    radarStatus.Text = success
-        and "Interação enviada: "..rarity
-        or "Falha ao acionar coleta"
-
-    task.wait(cfg.CollectWait)
-
-    if base then teleport(base) end
-
-    ignored[prompt] =
-        os.clock()+cfg.RetryDelay
-
-    busy = false
-end
-
--- LOOP DE ATUALIZACAO DO RADAR
-
-task.spawn(function()
-    while running and gui.Parent do
-        if ready and scanDirty then
-            refreshCandidates()
-        end
-
-        task.wait(cfg.RefreshInterval)
-        scanDirty = true
+    if running then
+        task.spawn(farmLoop)
     end
 end)
 
--- LOOP DE REACAO RAPIDA
+-- TEXTOS SEM BRILHO
 
-task.spawn(function()
-    while running and gui.Parent do
-        if ready and cfg.Auto and not busy then
-            for prompt,expiry in pairs(ignored) do
-                if os.clock() >= expiry
-                    or not prompt.Parent then
-
-                    ignored[prompt] = nil
-                end
-            end
-
-            local target = nextEgg()
-
-            if target then
-                collect(target)
-            else
-                radarStatus.Text =
-                    "Procurando ovos selecionados..."
-            end
-        end
-
-        task.wait(cfg.SearchInterval)
-    end
-end)
-
--- ENCERRAR
-
-_G.BlackzinnStop = function()
-    running = false
-    cfg.Auto = false
-
-    for _,connection in ipairs(connections) do
-        connection:Disconnect()
-    end
-
-    if gui.Parent then
-        gui:Destroy()
+local function whiteText(obj)
+    if obj:IsA("TextLabel")
+    or obj:IsA("TextButton") then
+        obj.TextColor3 = WHITE
+        obj.TextStrokeTransparency = 1
     end
 end
+
+for _,obj in ipairs(gui:GetDescendants()) do
+    whiteText(obj)
+end
+
+gui.DescendantAdded:Connect(whiteText)
+
+openTab("Principal")
+updateState()
