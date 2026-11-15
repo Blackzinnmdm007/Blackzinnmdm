@@ -42,6 +42,47 @@ local filtros = {
     colossal = true
 }
 
+-- AUTO SAVE: arquivo local do executor (quando suportado)
+local HttpService = game:GetService("HttpService")
+local arquivoConfig = "Blackzinnmdm_V12_7_Config.json"
+local autoSave = true
+local configAnterior = {}
+local desyncDesejado = false
+local farmDesejado = false
+
+local function salvarConfig()
+    if not autoSave or type(writefile) ~= "function" then return end
+    local dados = {
+        autoSave = autoSave,
+        autoFarm = ativo,
+        otimizar = otimizar,
+        desync = desyncDesejado,
+        filtros = filtros
+    }
+    pcall(function()
+        writefile(arquivoConfig, HttpService:JSONEncode(dados))
+    end)
+end
+
+if type(readfile) == "function" then
+    pcall(function()
+        if type(isfile) == "function" and not isfile(arquivoConfig) then return end
+        local dados = HttpService:JSONDecode(readfile(arquivoConfig))
+        if type(dados) ~= "table" then return end
+        configAnterior = dados
+        if type(dados.autoSave) == "boolean" then autoSave = dados.autoSave end
+        if type(dados.autoFarm) == "boolean" then farmDesejado = dados.autoFarm end
+        if type(dados.desync) == "boolean" then desyncDesejado = dados.desync end
+        if type(dados.filtros) == "table" then
+            for k in pairs(filtros) do
+                if type(dados.filtros[k]) == "boolean" then
+                    filtros[k] = dados.filtros[k]
+                end
+            end
+        end
+    end)
+end
+
 local pontos = {
     Vector3.new(24.74,3,6103.70),
     Vector3.new(23.77,3,5651.26),
@@ -168,6 +209,74 @@ local icone = botao("B",UDim2.new(0,15,.25,0),UDim2.fromOffset(48,48),gui)
 icone.BackgroundColor3=Color3.fromRGB(10,11,14);icone.TextColor3=tinta;icone.TextSize=26
 icone.Active=true;icone.Draggable=true
 conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
+-- BOTAO HOP FLUTUANTE (LADO DIREITO)
+local TeleportService = game:GetService("TeleportService")
+local hop = botao("HOP", UDim2.new(1,-79,.43,0), UDim2.fromOffset(64,50), gui)
+hop.Name = "HOP"
+hop.BackgroundColor3 = Color3.fromRGB(16,18,23)
+hop.TextColor3 = Color3.fromRGB(255,255,255)
+hop.TextSize = 19
+hop.Active = true
+hop.Draggable = true
+
+local hopOcupado = false
+local function requisitarServidores(url)
+    local req = (syn and syn.request) or http_request or request
+    if type(req) ~= "function" then
+        error("Seu executor nao oferece requisicoes HTTP")
+    end
+    local resposta = req({Url=url, Method="GET"})
+    if not resposta or tonumber(resposta.StatusCode) ~= 200 then
+        error("Falha ao consultar servidores: " .. tostring(resposta and resposta.StatusCode))
+    end
+    return HttpService:JSONDecode(resposta.Body)
+end
+
+conectar(hop.MouseButton1Click, function()
+    if hopOcupado then return end
+    hopOcupado = true
+    hop.Text = "..."
+    task.spawn(function()
+        local ok, erro = pcall(function()
+            -- Consulta ate 3 paginas para variar os servidores sorteados.
+            local servidores, cursor = {}, nil
+            for pagina=1,3 do
+                local url = "https://games.roblox.com/v1/games/" .. game.PlaceId ..
+                    "/servers/Public?sortOrder=Asc&limit=100"
+                if cursor then
+                    url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
+                end
+                local dados = requisitarServidores(url)
+                for _, servidor in ipairs(dados.data or {}) do
+                    if servidor.id ~= game.JobId and
+                       servidor.playing < servidor.maxPlayers then
+                        table.insert(servidores, servidor.id)
+                    end
+                end
+                cursor = dados.nextPageCursor
+                if not cursor then break end
+            end
+            if #servidores == 0 then
+                error("Nenhum outro servidor publico com vaga")
+            end
+            local escolhido = servidores[math.random(1,#servidores)]
+            -- Persiste as preferencias antes de tentar mudar de servidor.
+            salvarConfig()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, escolhido, player)
+        end)
+        if not ok then
+            warn("[Blackzinnmdm HOP] " .. tostring(erro))
+            hop.Text = "ERRO"
+            task.wait(2)
+        else
+            -- O teleporte pode demorar ou ser recusado pelo Roblox.
+            task.wait(8)
+        end
+        if not encerrado and hop.Parent then hop.Text = "HOP" end
+        hopOcupado = false
+    end)
+end)
+
 local nomes={"◉  Auto Farm","▤  Raridades","⚙  Outros"}
 local paginas,abas={},{}
 for i,nome in ipairs(nomes) do
@@ -218,11 +327,13 @@ for i,dados in ipairs({
     local nome,chave=dados[1],dados[2]
     local x=(i%2==1) and 15 or 274
     local y=(i<=2) and 43 or 112
-    local b=botao("[X] "..nome.."  ON",UDim2.fromOffset(x,y),UDim2.fromOffset(246,53),rarPage)
+    local b=botao((filtros[chave] and "[X] " or "[ ] ")..nome..(filtros[chave] and "  ON" or "  OFF"),UDim2.fromOffset(x,y),UDim2.fromOffset(246,53),rarPage)
+    b.BackgroundColor3=filtros[chave] and Color3.fromRGB(64,71,82) or branco
     conectar(b.MouseButton1Click,function()
         filtros[chave]=not filtros[chave]
         b.Text=(filtros[chave] and "[X] " or "[ ] ")..nome..(filtros[chave] and "  ON" or "  OFF")
         b.BackgroundColor3=filtros[chave] and Color3.fromRGB(64,71,82) or branco
+        salvarConfig()
     end)
 end
 
@@ -233,6 +344,19 @@ local bOtimizar=botao("[ ] Otimização (FPS)",UDim2.fromOffset(15,45),UDim2.fro
 local bDesync=botao("[ ] Desync (Clone na Base)",UDim2.fromOffset(15,115),UDim2.fromOffset(506,55),outrosPage)
 bDesync.TextColor3=tinta
 bDesync.TextSize=17
+local bAutoSave=botao("",UDim2.fromOffset(15,174),UDim2.fromOffset(506,28),outrosPage)
+bAutoSave.TextSize=15
+local function atualizarAutoSave()
+    bAutoSave.Text = autoSave and "[X] Auto Save: ON" or "[ ] Auto Save: OFF"
+    bAutoSave.BackgroundColor3 = autoSave and Color3.fromRGB(64,71,82) or branco
+end
+atualizarAutoSave()
+conectar(bAutoSave.MouseButton1Click,function()
+    autoSave = not autoSave
+    atualizarAutoSave()
+    if autoSave then salvarConfig() end
+    atualizar(autoSave and "Auto Save ativado" or "Auto Save desativado")
+end)
 
 -- CLONE VISUAL LOCAL NA BASE, CAMERA ACOMPANHA O CLONE
 local cloneBase=nil
@@ -303,10 +427,13 @@ end
 conectar(bDesync.MouseButton1Click,function()
     if cloneBase then
         desligarClone()
+        desyncDesejado=false
         atualizar("Clone desativado")
     else
         ligarClone()
+        desyncDesejado=cloneBase ~= nil
     end
+    salvarConfig()
 end)
 conectar(player.CharacterAdded,function()
     desligarClone()
@@ -374,6 +501,7 @@ conectar(bOtimizar.MouseButton1Click,function()
         bOtimizar.Text = "[ ] Otimização (FPS)"
         atualizar("Otimização desativada")
     end
+    salvarConfig()
 end)
 
 conectar(workspace.DescendantAdded,function(obj)
@@ -693,6 +821,7 @@ conectar(farmBotao.MouseButton1Click,function()
         or "◉  Auto Farm (Pegar Ovos): OFF"
     farmBotao.BackgroundColor3 = ativo and Color3.fromRGB(70,77,88) or Color3.fromRGB(38,42,49)
 
+    salvarConfig()
     if ativo then
         atualizar("Ativado")
         iniciarFarm(sessao)
@@ -700,6 +829,22 @@ conectar(farmBotao.MouseButton1Click,function()
         atualizar("Auto Farm desligado")
     end
 end)
+
+-- Restaurar preferencias seguras apos montar a interface.
+-- Auto Farm e lembrado no arquivo, mas exige clique para iniciar.
+if farmDesejado then
+    atualizar("Auto Farm salvo: clique para iniciar")
+end
+if configAnterior.otimizar == true then
+    otimizar = true
+    aplicarOtimizacao()
+    bOtimizar.Text = "[X] Otimização (FPS)"
+end
+if desyncDesejado then
+    task.defer(function()
+        if not encerrado then ligarClone() end
+    end)
+end
 
 -- REDIMENSIONAR
 local ajustar = botao(
