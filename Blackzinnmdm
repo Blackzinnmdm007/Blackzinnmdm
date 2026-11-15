@@ -211,7 +211,7 @@ icone.Active=true;icone.Draggable=true
 conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
 -- BOTAO HOP FLUTUANTE (LADO DIREITO)
 local TeleportService = game:GetService("TeleportService")
-local hop = botao("HOP", UDim2.new(1,-79,.43,0), UDim2.fromOffset(64,50), gui)
+local hop = botao("HOP", UDim2.new(1,-125,.29,0), UDim2.fromOffset(64,50), gui)
 hop.Name = "HOP"
 hop.BackgroundColor3 = Color3.fromRGB(16,18,23)
 hop.TextColor3 = Color3.fromRGB(255,255,255)
@@ -221,15 +221,41 @@ hop.Draggable = true
 
 local hopOcupado = false
 local function requisitarServidores(url)
-    local req = (syn and syn.request) or http_request or request
-    if type(req) ~= "function" then
-        error("Seu executor nao oferece requisicoes HTTP")
+    local metodos = {}
+    if type(request) == "function" then table.insert(metodos, request) end
+    if type(http_request) == "function" then table.insert(metodos, http_request) end
+    if type(syn) == "table" and type(syn.request) == "function" then
+        table.insert(metodos, syn.request)
     end
-    local resposta = req({Url=url, Method="GET"})
-    if not resposta or tonumber(resposta.StatusCode) ~= 200 then
-        error("Falha ao consultar servidores: " .. tostring(resposta and resposta.StatusCode))
+    if type(http) == "table" and type(http.request) == "function" then
+        table.insert(metodos, http.request)
     end
-    return HttpService:JSONDecode(resposta.Body)
+
+    local ultimoErro = "Nenhum metodo HTTP disponivel no executor"
+    for _, metodo in ipairs(metodos) do
+        local ok, resposta = pcall(metodo, {Url = url, Method = "GET"})
+        if ok and type(resposta) == "table" then
+            local status = tonumber(resposta.StatusCode or resposta.Status or resposta.status_code)
+            local corpo = resposta.Body or resposta.body
+            if status == 200 and type(corpo) == "string" then
+                local decodificou, dados = pcall(HttpService.JSONDecode, HttpService, corpo)
+                if decodificou and type(dados) == "table" then return dados end
+                ultimoErro = "Resposta JSON invalida"
+            else
+                ultimoErro = "HTTP " .. tostring(status or "sem status")
+            end
+        else
+            ultimoErro = tostring(resposta)
+        end
+    end
+    error(ultimoErro)
+end
+
+local function avisoHop(mensagem)
+    warn("[Blackzinnmdm HOP] " .. tostring(mensagem))
+    if not encerrado and hop.Parent then
+        hop.Text = "ERRO"
+    end
 end
 
 conectar(hop.MouseButton1Click, function()
@@ -238,42 +264,45 @@ conectar(hop.MouseButton1Click, function()
     hop.Text = "..."
     task.spawn(function()
         local ok, erro = pcall(function()
-            -- Consulta ate 3 paginas para variar os servidores sorteados.
             local servidores, cursor = {}, nil
-            for pagina=1,3 do
+            for pagina = 1, 3 do
                 local url = "https://games.roblox.com/v1/games/" .. game.PlaceId ..
                     "/servers/Public?sortOrder=Asc&limit=100"
-                if cursor then
-                    url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
-                end
+                if cursor then url = url .. "&cursor=" .. HttpService:UrlEncode(cursor) end
                 local dados = requisitarServidores(url)
                 for _, servidor in ipairs(dados.data or {}) do
-                    if servidor.id ~= game.JobId and
-                       servidor.playing < servidor.maxPlayers then
+                    if servidor.id and servidor.id ~= game.JobId
+                        and tonumber(servidor.playing) and tonumber(servidor.maxPlayers)
+                        and servidor.playing < servidor.maxPlayers then
                         table.insert(servidores, servidor.id)
                     end
                 end
                 cursor = dados.nextPageCursor
                 if not cursor then break end
             end
-            if #servidores == 0 then
-                error("Nenhum outro servidor publico com vaga")
-            end
-            local escolhido = servidores[math.random(1,#servidores)]
-            -- Persiste as preferencias antes de tentar mudar de servidor.
+            if #servidores == 0 then error("Nenhum servidor diferente com vaga") end
             salvarConfig()
+            local escolhido = servidores[math.random(1, #servidores)]
             TeleportService:TeleportToPlaceInstance(game.PlaceId, escolhido, player)
         end)
         if not ok then
-            warn("[Blackzinnmdm HOP] " .. tostring(erro))
-            hop.Text = "ERRO"
-            task.wait(2)
+            avisoHop(erro)
+            task.wait(3)
         else
-            -- O teleporte pode demorar ou ser recusado pelo Roblox.
+            -- A chamada pode retornar antes da troca efetiva.
             task.wait(8)
         end
         if not encerrado and hop.Parent then hop.Text = "HOP" end
         hopOcupado = false
+    end)
+end)
+
+conectar(TeleportService.TeleportInitFailed, function(jogador, resultado, mensagem)
+    if jogador ~= player then return end
+    avisoHop("TeleportInitFailed: " .. tostring(resultado) .. " | " .. tostring(mensagem))
+    hopOcupado = false
+    task.delay(3, function()
+        if not encerrado and hop.Parent then hop.Text = "HOP" end
     end)
 end)
 
