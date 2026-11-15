@@ -859,10 +859,22 @@ conectar(farmBotao.MouseButton1Click,function()
     end
 end)
 
--- Restaurar preferencias seguras apos montar a interface.
--- Auto Farm e lembrado no arquivo, mas exige clique para iniciar.
-if farmDesejado then
-    atualizar("Auto Farm salvo: clique para iniciar")
+-- Restaurar Auto Farm automaticamente quando salvo como ligado.
+-- Aguarda personagem e interface ficarem prontos no novo servidor.
+if farmDesejado and autoSave then
+    task.spawn(function()
+        local personagem = player.Character or player.CharacterAdded:Wait()
+        personagem:WaitForChild("HumanoidRootPart", 20)
+        task.wait(2)
+        if encerrado or ativo then return end
+        ativo = true
+        sessao = sessao + 1
+        farmBotao.Text = "◉  Auto Farm (Pegar Ovos): ON"
+        farmBotao.BackgroundColor3 = Color3.fromRGB(70,77,88)
+        atualizar("Auto Farm restaurado automaticamente")
+        salvarConfig()
+        iniciarFarm(sessao)
+    end)
 end
 if configAnterior.otimizar == true then
     otimizar = true
