@@ -1,22 +1,46 @@
 
--- BLACKZINNMDM V10.4
--- SWING FOR EGG
+-- BLACKZINNMDM V12.0
+-- AUTO FARM + DESYNC + OTIMIZACAO
+-- Android / Delta
 
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
 local player = Players.LocalPlayer
 local pg = player:WaitForChild("PlayerGui")
 
+local env = (getgenv and getgenv()) or _G
+
+if type(env.BlackzinnmdmParar) == "function" then
+    pcall(env.BlackzinnmdmParar)
+end
+
+local antigo = pg:FindFirstChild("Blackzinnmdm")
+if antigo then
+    antigo:Destroy()
+end
+
+-- CONFIGURACOES
+
 local velocidadeTP = 1.10
 local distanciaRadar = 500
-local IMAGE_ID = "rbxassetid://77905657296524"
+local imagem = "rbxassetid://77905657296524"
 
 local ativo = false
-local base = nil
+local desync = false
+local otimizar = false
 local levarBase = true
 local ignorarChocando = true
-local entregas = 0
+
+local base = nil
+local clone = nil
 local sessao = 0
+local entregas = 0
 local encerrado = false
+
+local objetosOcultos = {}
+local conexoes = {}
 
 local filtros = {
     segredo = true,
@@ -24,7 +48,7 @@ local filtros = {
     divino = true
 }
 
-local coordenadas = {
+local pontos = {
     Vector3.new(24.74,3,6103.70),
     Vector3.new(23.77,3,5651.26),
     Vector3.new(25.29,3,5215.19),
@@ -35,32 +59,59 @@ local coordenadas = {
     Vector3.new(25.50,3,2959.96),
     Vector3.new(20.62,3,2524.49),
     Vector3.new(20.41,3,2099.99),
-    Vector3.new(23.10,3,1724.55),
-    Vector3.new(17.44,3,1366.67),
-    Vector3.new(3.71,3,1080.96),
-    Vector3.new(57.46,3,749.01),
     Vector3.new(-7.36,3,470.16),
     Vector3.new(-5.75,3,461.27),
     Vector3.new(11.35,3,217.60)
 }
 
-local roxo = Color3.fromRGB(174,25,255)
-local fundo = Color3.fromRGB(16,5,30)
-local branco = Color3.fromRGB(255,255,255)
+-- FUNCOES BASICAS
 
-local antigo = pg:FindFirstChild("Blackzinnmdm")
-if antigo then antigo:Destroy() end
+local function conectar(sinal, fn)
+    local c = sinal:Connect(fn)
+    table.insert(conexoes,c)
+    return c
+end
 
-local function criar(tipo,props,pai)
+local function criar(tipo, props, pai)
     local obj = Instance.new(tipo)
+
     for k,v in pairs(props) do
         obj[k] = v
     end
+
     obj.Parent = pai
     return obj
 end
 
-local function borda(obj)
+local function root()
+    local char = player.Character
+    return char and
+        char:FindFirstChild("HumanoidRootPart")
+end
+
+local function normalizar(t)
+    t = tostring(t or ""):lower()
+
+    local trocas = {
+        ["á"]="a", ["à"]="a", ["ã"]="a",
+        ["â"]="a", ["é"]="e", ["ê"]="e",
+        ["í"]="i", ["ó"]="o", ["ô"]="o",
+        ["õ"]="o", ["ú"]="u", ["ç"]="c"
+    }
+
+    for a,b in pairs(trocas) do
+        t = t:gsub(a,b)
+    end
+
+    return t
+end
+
+-- INTERFACE
+
+local roxo = Color3.fromRGB(175,35,255)
+local escuro = Color3.fromRGB(20,8,35)
+
+local function estilizar(obj)
     criar("UICorner",{
         CornerRadius = UDim.new(0,9)
     },obj)
@@ -76,14 +127,15 @@ local function botao(nome,pos,tamanho,pai)
         Text = nome,
         Position = pos,
         Size = tamanho,
-        BackgroundColor3 = fundo,
-        TextColor3 = branco,
+        BackgroundColor3 = escuro,
+        TextColor3 = Color3.new(1,1,1),
+        Font = Enum.Font.GothamBold,
         TextSize = 14,
         TextWrapped = true,
-        Font = Enum.Font.GothamBold,
         ZIndex = 5
     },pai)
-    borda(b)
+
+    estilizar(b)
     return b
 end
 
@@ -93,45 +145,26 @@ local function texto(nome,pos,tamanho,pai,sz)
         Position = pos,
         Size = tamanho,
         BackgroundTransparency = 1,
-        TextColor3 = branco,
+        TextColor3 = Color3.new(1,1,1),
+        Font = Enum.Font.GothamBold,
         TextSize = sz or 14,
         TextWrapped = true,
-        Font = Enum.Font.GothamBold,
         ZIndex = 5
     },pai)
 end
-
-local function normalizar(t)
-    t = tostring(t or ""):lower()
-    local mapa = {
-        ["á"]="a",["à"]="a",["ã"]="a",
-        ["â"]="a",["é"]="e",["ê"]="e",
-        ["í"]="i",["ó"]="o",["ô"]="o",
-        ["õ"]="o",["ú"]="u",["ç"]="c"
-    }
-    for a,b in pairs(mapa) do
-        t = t:gsub(a,b)
-    end
-    return t
-end
-
-local function root()
-    local c = player.Character
-    return c and c:FindFirstChild("HumanoidRootPart")
-end
-
--- INTERFACE
 
 local gui = criar("ScreenGui",{
     Name = "Blackzinnmdm",
     ResetOnSpawn = false,
     IgnoreGuiInset = true,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ZIndexBehavior =
+        Enum.ZIndexBehavior.Sibling
 },pg)
 
 local frame = criar("Frame",{
     Size = UDim2.fromOffset(560,350),
-    Position = UDim2.new(.5,-280,.5,-175),
+    AnchorPoint = Vector2.new(.5,.5),
+    Position = UDim2.fromScale(.5,.5),
     BackgroundTransparency = 1,
     Active = true,
     Draggable = true
@@ -142,19 +175,24 @@ local escala = criar("UIScale",{
 },frame)
 
 local camera = workspace.CurrentCamera
+
 if camera then
     local v = camera.ViewportSize
+
     escala.Scale = math.clamp(
-        math.min(.8,(v.X-20)/560,(v.Y-20)/350),
+        math.min(
+            .8,
+            (v.X-20)/560,
+            (v.Y-20)/350
+        ),
         .4,.8
     )
 end
 
 criar("ImageLabel",{
-    Name = "Moldura",
     Size = UDim2.fromScale(1,1),
     BackgroundTransparency = 1,
-    Image = IMAGE_ID,
+    Image = imagem,
     ScaleType = Enum.ScaleType.Stretch,
     ZIndex = 1
 },frame)
@@ -165,80 +203,56 @@ local conteudo = criar("Frame",{
     ZIndex = 2
 },frame)
 
-texto("SWING FOR EGG",
-    UDim2.fromScale(.31,.075),
-    UDim2.fromScale(.48,.09),
-    conteudo,22)
+texto(
+    "SWING FOR EGG",
+    UDim2.fromScale(.30,.07),
+    UDim2.fromScale(.49,.10),
+    conteudo,21
+)
 
-texto("V10.4",
-    UDim2.fromScale(.47,.17),
-    UDim2.fromScale(.14,.05),
-    conteudo,12)
+texto(
+    "BLACKZINNMDM V12.0",
+    UDim2.fromScale(.36,.17),
+    UDim2.fromScale(.36,.06),
+    conteudo,12
+)
 
--- ICONE FLUTUANTE
+local icone = botao(
+    "🥚",
+    UDim2.new(0,12,.15,0),
+    UDim2.fromOffset(48,48),
+    gui
+)
 
-local icon = botao("🥚",
-    UDim2.new(0,12,.17,0),
-    UDim2.fromOffset(49,49),
-    gui)
+icone.TextSize = 26
+icone.Active = true
+icone.Draggable = true
 
-icon.TextSize = 29
-icon.Active = true
-icon.Draggable = true
-
-icon.MouseButton1Click:Connect(function()
+conectar(icone.MouseButton1Click,function()
     frame.Visible = not frame.Visible
 end)
 
--- MINIMIZAR E FECHAR
-
-local minimizar = botao("−",
+local minimizar = botao(
+    "−",
     UDim2.fromScale(.83,.06),
     UDim2.fromScale(.055,.09),
-    conteudo)
+    conteudo
+)
 
-local fechar = botao("X",
+local fechar = botao(
+    "X",
     UDim2.fromScale(.90,.06),
     UDim2.fromScale(.055,.09),
-    conteudo)
+    conteudo
+)
 
-minimizar.MouseButton1Click:Connect(function()
+conectar(minimizar.MouseButton1Click,function()
     frame.Visible = false
-end)
-
-fechar.MouseButton1Click:Connect(function()
-    ativo = false
-    sessao += 1
-    encerrado = true
-    gui:Destroy()
-end)
-
--- AJUSTAR TAMANHO
-
-local diminuir = botao("−",
-    UDim2.fromScale(.80,.76),
-    UDim2.fromScale(.065,.085),
-    conteudo)
-
-local aumentar = botao("+",
-    UDim2.fromScale(.88,.76),
-    UDim2.fromScale(.065,.085),
-    conteudo)
-
-diminuir.TextSize = 22
-aumentar.TextSize = 22
-
-diminuir.MouseButton1Click:Connect(function()
-    escala.Scale = math.max(.4,escala.Scale-.1)
-end)
-
-aumentar.MouseButton1Click:Connect(function()
-    escala.Scale = math.min(1.2,escala.Scale+.1)
 end)
 
 -- ABAS
 
-local nomesAbas = {
+local nomes = {
     "Auto Farm",
     "Base / TP",
     "Raridades",
@@ -246,15 +260,18 @@ local nomesAbas = {
 }
 
 local paginas = {}
-local botoesAbas = {}
+local abas = {}
 
-for i,nome in ipairs(nomesAbas) do
-    local b = botao(nome,
+for i,nome in ipairs(nomes) do
+
+    local b = botao(
+        nome,
         UDim2.fromScale(.09,.27+(i-1)*.125),
         UDim2.fromScale(.22,.105),
-        conteudo)
+        conteudo
+    )
 
-    botoesAbas[i] = b
+    abas[i] = b
 
     paginas[i] = criar("Frame",{
         Position = UDim2.fromScale(.34,.275),
@@ -264,79 +281,93 @@ for i,nome in ipairs(nomesAbas) do
         ZIndex = 3
     },conteudo)
 
-    b.MouseButton1Click:Connect(function()
+    conectar(b.MouseButton1Click,function()
         for j,p in ipairs(paginas) do
             p.Visible = i == j
-            botoesAbas[j].BackgroundColor3 =
-                i == j and roxo or fundo
+
+            abas[j].BackgroundColor3 =
+                i == j and roxo or escuro
         end
     end)
 end
 
-botoesAbas[1].BackgroundColor3 = roxo
+abas[1].BackgroundColor3 = roxo
 
-local farmPage = paginas[1]
-local basePage = paginas[2]
-local rarPage = paginas[3]
-local outrosPage = paginas[4]
-
--- STATUS
-
-local status = texto("Status: Aguardando...",
+local status = texto(
+    "Status: Aguardando...",
     UDim2.fromScale(.34,.86),
     UDim2.fromScale(.36,.07),
-    conteudo,12)
+    conteudo,12
+)
 
-local contador = texto("Ovos coletados: 0",
+local contador = texto(
+    "Ovos coletados: 0",
     UDim2.fromScale(.70,.86),
     UDim2.fromScale(.25,.07),
-    conteudo,12)
+    conteudo,12
+)
 
-local function atualizar(t)
+local function atualizar(msg)
     if status.Parent then
-        status.Text = "Status: "..t
+        status.Text = "Status: "..msg
     end
 end
 
 -- AUTO FARM
 
-texto("AUTO FARM",
+local farmPage = paginas[1]
+
+texto(
+    "AUTO FARM",
     UDim2.fromScale(.02,.02),
     UDim2.fromScale(.96,.17),
-    farmPage,19)
+    farmPage,19
+)
 
-local toggle = botao("Auto Farm: OFF",
+local farmBotao = botao(
+    "Auto Farm: OFF",
     UDim2.fromScale(.03,.30),
     UDim2.fromScale(.94,.27),
-    farmPage)
+    farmPage
+)
 
 -- BASE / TP
 
-texto("BASE / TP",
+local basePage = paginas[2]
+
+texto(
+    "BASE / TP",
     UDim2.fromScale(.02,.02),
     UDim2.fromScale(.96,.17),
-    basePage,19)
+    basePage,19
+)
 
-local salvar = botao("Salvar Base",
+local salvar = botao(
+    "Salvar Base",
     UDim2.fromScale(.03,.24),
     UDim2.fromScale(.94,.23),
-    basePage)
+    basePage
+)
 
-local voltar = botao("TP Base",
+local voltar = botao(
+    "TP Base",
     UDim2.fromScale(.03,.53),
     UDim2.fromScale(.94,.23),
-    basePage)
+    basePage
+)
 
-salvar.MouseButton1Click:Connect(function()
+conectar(salvar.MouseButton1Click,function()
     local r = root()
+
     if r then
         base = r.CFrame
         atualizar("Base salva")
     end
 end)
 
-voltar.MouseButton1Click:Connect(function()
+conectar(voltar.MouseButton1Click,function()
     local r = root()
+
     if r and base then
         r.CFrame = base
         atualizar("Teleportado para base")
@@ -345,379 +376,957 @@ end)
 
 -- RARIDADES
 
-texto("RARIDADES",
+local rarPage = paginas[3]
+
+texto(
+    "RARIDADES",
     UDim2.fromScale(.02,.02),
     UDim2.fromScale(.96,.17),
-    rarPage,19)
+    rarPage,19
+)
 
-local listaRaridades = {
+for i,dados in ipairs({
     {"Segredo","segredo"},
     {"Eterno","eterno"},
     {"Divino","divino"}
-}
+}) do
 
-for i,dados in ipairs(listaRaridades) do
     local nome,chave = dados[1],dados[2]
-    local b = botao("[X] "..nome,
+
+    local b = botao(
+        "[X] "..nome,
         UDim2.fromScale(.03,.23+(i-1)*.25),
         UDim2.fromScale(.94,.21),
-        rarPage)
+        rarPage
+    )
 
-    b.MouseButton1Click:Connect(function()
+    conectar(b.MouseButton1Click,function()
         filtros[chave] = not filtros[chave]
-        b.Text = (filtros[chave] and "[X] " or "[ ] ")..nome
+
+        b.Text =
+            (filtros[chave] and "[X] " or "[ ] ")
+            ..nome
     end)
 end
 
 -- OUTROS
 
-texto("OUTROS",
-    UDim2.fromScale(.02,.02),
-    UDim2.fromScale(.96,.17),
-    outrosPage,19)
+local outrosPage = paginas[4]
 
-local bLevar = botao("[X] Levar ovo para a base",
-    UDim2.fromScale(.03,.24),
-    UDim2.fromScale(.94,.23),
-    outrosPage)
+texto(
+    "OUTROS",
+    UDim2.fromScale(.02,.01),
+    UDim2.fromScale(.96,.14),
+    outrosPage,18
+)
 
-local bIgnorar = botao("[X] Ignorar ovos chocando",
-    UDim2.fromScale(.03,.54),
-    UDim2.fromScale(.94,.23),
-    outrosPage)
+local bLevar = botao(
+    "[X] Levar ovo para a base",
+    UDim2.fromScale(.03,.17),
+    UDim2.fromScale(.94,.17),
+    outrosPage
+)
 
-bLevar.MouseButton1Click:Connect(function()
+local bIgnorar = botao(
+    "[X] Ignorar ovos chocando",
+    UDim2.fromScale(.03,.37),
+    UDim2.fromScale(.94,.17),
+    outrosPage
+)
+
+local bDesync = botao(
+    "[ ] Desync",
+    UDim2.fromScale(.03,.57),
+    UDim2.fromScale(.94,.17),
+    outrosPage
+)
+
+local bOtimizar = botao(
+    "[ ] Otimização",
+    UDim2.fromScale(.03,.77),
+    UDim2.fromScale(.94,.17),
+    outrosPage
+)
+
+conectar(bLevar.MouseButton1Click,function()
     levarBase = not levarBase
-    bLevar.Text = (levarBase and "[X] " or "[ ] ")
+
+    bLevar.Text =
+        (levarBase and "[X] " or "[ ] ")
         .."Levar ovo para a base"
 end)
 
-bIgnorar.MouseButton1Click:Connect(function()
+conectar(bIgnorar.MouseButton1Click,function()
     ignorarChocando = not ignorarChocando
-    bIgnorar.Text = (ignorarChocando and "[X] " or "[ ] ")
+
+    bIgnorar.Text =
+        (ignorarChocando and "[X] " or "[ ] ")
         .."Ignorar ovos chocando"
 end)
 
--- BLACKLIST COSMICO
+-- OTIMIZACAO
 
-local function blacklist(ovo)
-    local function bloqueado(valor)
-        local t = normalizar(valor)
-        return t:find("cosmico",1,true) ~= nil
-            or t:find("cosmic",1,true) ~= nil
-    end
+local function ocultar(obj)
+    if obj and obj.Parent
+        and not objetosOcultos[obj] then
 
-    if bloqueado(ovo.Name)
-        or bloqueado(ovo:GetAttribute("Rarity"))
-        or bloqueado(ovo:GetAttribute("Raridade")) then
-        return true
+        objetosOcultos[obj] = obj.Parent
+        obj.Parent = nil
     end
-
-    local tag = ovo:FindFirstChild("EggNameTag",true)
-    if tag then
-        for _,v in ipairs(tag:GetDescendants()) do
-            if (v:IsA("TextLabel") or v:IsA("TextButton"))
-                and bloqueado(v.Text) then
-                return true
-            end
-        end
-    end
-    return false
 end
 
--- IDENTIFICAR RARIDADE
+local function aplicarOtimizacao()
 
-local function raridade(ovo)
-    if blacklist(ovo) then return nil end
+    -- Maquinas
+    ocultar(
+        workspace:FindFirstChild("FuseMachineKit")
+    )
 
-    local tag = ovo:FindFirstChild("EggNameTag",true)
-    if not tag then return nil end
+    ocultar(
+        workspace:FindFirstChild("MutationMachineKit")
+    )
 
-    local nomes = {
-        segredo = {"segredo","secret"},
-        eterno = {"eterno","eternal"},
-        divino = {"divino","divine"}
-    }
+    -- Ovos colocados nas bases
+    for _,plot in ipairs(workspace:GetChildren()) do
+        if plot.Name:match("^Plot_") then
+            ocultar(
+                plot:FindFirstChild("EggHatch")
+            )
+        end
+    end
 
-    for _,v in ipairs(tag:GetDescendants()) do
-        if v:IsA("TextLabel") then
-            local t = normalizar(v.Text)
+    -- Cercas das bases
+    for _,plot in ipairs(workspace:GetChildren()) do
+        if plot.Name:match("^Plot_") then
+            local estrutura =
+                plot:FindFirstChild("Base")
 
-            for chave,lista in pairs(nomes) do
-                if filtros[chave] then
-                    for _,nome in ipairs(lista) do
-                        if t:find(nome,1,true) then
-                            return chave
-                        end
+            if estrutura then
+                for _,obj in ipairs(
+                    estrutura:GetChildren()
+                ) do
+                    if obj.Name == "Part"
+                        and obj:IsA("BasePart") then
+
+                        ocultar(obj)
                     end
                 end
             end
         end
     end
-    return nil
-end
 
-local function promptDoOvo(ovo)
-    local a = ovo:FindFirstChild("PromptAnchor",true)
-    return a and a:FindFirstChildWhichIsA(
-        "ProximityPrompt",true
-    )
-end
+    -- Postes e decoracoes
+    local mapa = workspace:FindFirstChild("Map")
 
-local function posicao(ovo)
-    local a = ovo:FindFirstChild("PromptAnchor",true)
-    if a then
-        if a:IsA("BasePart") then
-            return a.Position
-        elseif a:IsA("Attachment") then
-            return a.WorldPosition
+    if mapa then
+        local decor = mapa:FindFirstChild("Decor")
+        if decor then
+            ocultar(decor)
         end
     end
-    return ovo:GetPivot().Position
 end
 
-local function chocando(ovo)
-    if not ignorarChocando then return false end
-    local n = normalizar(ovo.Name)
-    return n:find("hatch",1,true) ~= nil
-        or n:find("chocando",1,true) ~= nil
+local function restaurarOtimizacao()
+    for obj,pai in pairs(objetosOcultos) do
+        if obj and pai then
+            pcall(function()
+                obj.Parent = pai
+            end)
+        end
+
+        objetosOcultos[obj] = nil
+    end
 end
 
--- RADAR
+conectar(bOtimizar.MouseButton1Click,function()
+    otimizar = not otimizar
 
-local function procurarNaArea(ponto,ignorados)
-    local pasta = workspace:FindFirstChild("Eggs")
-    if not pasta then return nil end
+    if otimizar then
+        aplicarOtimizacao()
 
-    local melhor,menor = nil,math.huge
+        bOtimizar.Text =
+            "[X] Otimização"
 
-    for _,ovo in ipairs(pasta:GetDescendants()) do
-        if ovo:IsA("Model")
-            and ovo.Name == "SpawnedEgg"
-            and not ignorados[ovo]
-            and not chocando(ovo)
-            and raridade(ovo) then
+        atualizar("Otimização ativada")
+    else
+        restaurarOtimizacao()
 
-            local prompt = promptDoOvo(ovo)
+        bOtimizar.Text =
+            "[ ] Otimização"
 
-            if prompt and prompt.Enabled then
-                local d = (posicao(ovo)-ponto).Magnitude
+        atualizar("Otimização desativada")
+    end
+end)
 
-                if d <= distanciaRadar and d < menor then
-                    melhor = ovo
-                    menor = d
+-- OCULTAR OBJETOS NOVOS
+
+conectar(workspace.DescendantAdded,function(obj)
+    if not otimizar then return end
+
+    if obj.Name == "EggHatch" then
+        local pai = obj.Parent
+
+        if pai
+            and pai.Name:match("^Plot_")
+            and pai.Parent == workspace then
+
+            task.defer(function()
+                if otimizar and obj.Parent == pai then
+                    ocultar(obj)
+                end
+            end)
+        end
+    end
+end)
+
+-- DESYNC LOCAL
+
+local joystickGui = nil
+local direcaoJoystick = Vector2.zero
+local cameraAnterior = nil
+local controleClone = nil
+
+local function pararDesync()
+    desync = false
+    direcaoJoystick = Vector2.zero
+
+    if controleClone then
+        controleClone:Disconnect()
+        controleClone = nil
+    end
+
+    if joystickGui then
+        joystickGui:Destroy()
+        joystickGui = nil
+    end
+
+    if clone then
+        clone:Destroy()
+        clone = nil
+    end
+
+    local cameraAtual = workspace.CurrentCamera
+    local char = player.Character
+    local humanoid = char and
+        char:FindFirstChildOfClass("Humanoid")
+
+    if cameraAtual then
+        cameraAtual.CameraType =
+            Enum.CameraType.Custom
+
+        if humanoid then
+            cameraAtual.CameraSubject = humanoid
+        elseif cameraAnterior then
+            cameraAtual.CameraSubject =
+                cameraAnterior
+        end
+    end
+
+    bDesync.Text = "[ ] Desync"
+end
+
+local function iniciarDesync()
+    if desync then return end
+
+    local char = player.Character
+    local r = root()
+
+    if not char or not r then
+        atualizar("Personagem indisponível")
+        return
+    end
+
+    local antigoArchivable = char.Archivable
+    char.Archivable = true
+
+    local ok,novoClone = pcall(function()
+        return char:Clone()
+    end)
+
+    char.Archivable = antigoArchivable
+
+    if not ok or not novoClone then
+        atualizar("Falha ao criar clone")
+        return
+    end
+
+    clone = novoClone
+    clone.Name = "BlackzinnmdmClone"
+
+    for _,obj in ipairs(clone:GetDescendants()) do
+        if obj:IsA("BaseScript") then
+            obj:Destroy()
+        elseif obj:IsA("BasePart") then
+            obj.CanCollide = false
+            obj.CanTouch = false
+            obj.CanQuery = false
+        end
+    end
+
+    clone.Parent = workspace
+
+    local cloneRoot =
+        clone:FindFirstChild("HumanoidRootPart")
+
+    local cloneHumanoid =
+        clone:FindFirstChildOfClass("Humanoid")
+
+    if not cloneRoot or not cloneHumanoid then
+        pararDesync()
+        atualizar("Clone inválido")
+        return
+    end
+
+    cloneRoot.CFrame = r.CFrame
+    cloneRoot.Anchored = true
+
+    desync = true
+    bDesync.Text = "[X] Desync"
+
+    local cameraAtual = workspace.CurrentCamera
+
+    if cameraAtual then
+        cameraAnterior = cameraAtual.CameraSubject
+        cameraAtual.CameraType =
+            Enum.CameraType.Custom
+        cameraAtual.CameraSubject =
+            cloneHumanoid
+    end
+
+    -- JOYSTICK DO CLONE
+
+    joystickGui = criar("Frame",{
+        Name = "JoystickClone",
+        Size = UDim2.fromOffset(130,130),
+        Position = UDim2.new(0,25,1,-165),
+        BackgroundColor3 =
+            Color3.fromRGB(25,10,45),
+        BackgroundTransparency = .25,
+        Active = true,
+        ZIndex = 20
+    },gui)
+
+    criar("UICorner",{
+        CornerRadius = UDim.new(1,0)
+    },joystickGui)
+
+    criar("UIStroke",{
+        Color = roxo,
+        Thickness = 2
+    },joystickGui)
+
+    local bolinha = criar("Frame",{
+        Size = UDim2.fromOffset(52,52),
+        AnchorPoint = Vector2.new(.5,.5),
+        Position = UDim2.fromScale(.5,.5),
+        BackgroundColor3 = roxo,
+        ZIndex = 21
+    },joystickGui)
+
+    criar("UICorner",{
+        CornerRadius = UDim.new(1,0)
+    },bolinha)
+
+    local toqueAtivo = nil
+
+    local function moverJoystick(pos)
+        if not joystickGui
+            or not joystickGui.Parent then
+            return
+        end
+
+        local centro =
+            joystickGui.AbsolutePosition
+            + joystickGui.AbsoluteSize/2
+
+        local delta = Vector2.new(
+            pos.X-centro.X,
+            pos.Y-centro.Y
+        )
+
+        local raio = 39
+
+        if delta.Magnitude > raio then
+            delta = delta.Unit*raio
+        end
+
+        direcaoJoystick = delta/raio
+
+        bolinha.Position = UDim2.new(
+            .5,delta.X,
+            .5,delta.Y
+        )
+    end
+
+    local function soltarJoystick()
+        toqueAtivo = nil
+        direcaoJoystick = Vector2.zero
+
+        if bolinha.Parent then
+            bolinha.Position =
+                UDim2.fromScale(.5,.5)
+        end
+    end
+
+    conectar(joystickGui.InputBegan,function(input)
+        if input.UserInputType ==
+            Enum.UserInputType.Touch
+            or input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
+            toqueAtivo = input
+            moverJoystick(input.Position)
+        end
+    end)
+
+    conectar(UIS.InputChanged,function(input)
+        if not desync or not toqueAtivo then
+            return
+        end
+
+        if input == toqueAtivo or
+            (toqueAtivo.UserInputType ==
+                Enum.UserInputType.MouseButton1
+                and input.UserInputType ==
+                Enum.UserInputType.MouseMovement) then
+
+            moverJoystick(input.Position)
+        end
+    end)
+
+    conectar(UIS.InputEnded,function(input)
+        if input == toqueAtivo then
+            soltarJoystick()
+        end
+    end)
+
+    controleClone =
+        RunService.RenderStepped:Connect(function(dt)
+
+        if not desync or not clone
+            or not clone.Parent then
+            return
+        end
+
+        local cr =
+            clone:FindFirstChild("HumanoidRootPart")
+
+        local camAtual = workspace.CurrentCamera
+
+        if not cr or not camAtual then
+            return
+        end
+
+        local frente = camAtual.CFrame.LookVector
+        local direita = camAtual.CFrame.RightVector
+
+        frente = Vector3.new(
+            frente.X,0,frente.Z
+        )
+
+        direita = Vector3.new(
+            direita.X,0,direita.Z
+        )
+
+        if frente.Magnitude > 0 then
+            frente = frente.Unit
+        end
+
+        if direita.Magnitude > 0 then
+            direita = direita.Unit
+        end
+
+        local movimento =
+            direita*direcaoJoystick.X
+            - frente*direcaoJoystick.Y
+
+        if movimento.Magnitude > 1 then
+            movimento = movimento.Unit
+        end
+
+        if movimento.Magnitude > 0 then
+            local novaPos =
+                cr.Position+movimento*16*dt
+
+            cr.CFrame = CFrame.lookAt(
+                novaPos,
+                novaPos+movimento
+            )
+        end
+    end)
+
+    atualizar("Desync local ativado")
+end
+
+conectar(bDesync.MouseButton1Click,function()
+    if desync then
+        pararDesync()
+        atualizar("Desync desligado")
+    else
+        iniciarDesync()
+    end
+end)
+
+-- SISTEMA DE OVOS
+
+local function textoOvo(modelo)
+    local partes = {modelo.Name}
+
+    for _,obj in ipairs(modelo:GetDescendants()) do
+        if obj.Name == "EggNameTag" then
+
+            if obj:IsA("TextLabel") then
+                table.insert(partes,obj.Text)
+            end
+
+            for _,filho in ipairs(
+                obj:GetDescendants()
+            ) do
+                if filho:IsA("TextLabel") then
+                    table.insert(partes,filho.Text)
                 end
             end
         end
     end
+
+    for _,nome in ipairs({
+        "Rarity","EggName","Name"
+    }) do
+        local valor = modelo:GetAttribute(nome)
+
+        if valor then
+            table.insert(
+                partes,tostring(valor)
+            )
+        end
+    end
+
+    return normalizar(
+        table.concat(partes," ")
+    )
+end
+
+local function permitido(modelo)
+    local t = textoOvo(modelo)
+
+    -- BLACKLIST COSMICO
+    if t:find("cosmico",1,true)
+        or t:find("cosmic",1,true) then
+        return false
+    end
+
+    return
+        (filtros.segredo and (
+            t:find("segredo",1,true)
+            or t:find("secret",1,true)
+        ))
+        or (filtros.eterno and (
+            t:find("eterno",1,true)
+            or t:find("eternal",1,true)
+        ))
+        or (filtros.divino and (
+            t:find("divino",1,true)
+            or t:find("divine",1,true)
+        ))
+end
+
+local function dadosOvo(modelo)
+    local anchor =
+        modelo:FindFirstChild(
+            "PromptAnchor",true
+        )
+
+    local prompt = anchor and
+        anchor:FindFirstChildWhichIsA(
+            "ProximityPrompt",true
+        )
+
+    if not prompt then
+        prompt =
+            modelo:FindFirstChildWhichIsA(
+                "ProximityPrompt",true
+            )
+    end
+
+    local pos
+
+    if anchor and anchor:IsA("BasePart") then
+        pos = anchor.Position
+
+    elseif anchor and
+        anchor:IsA("Attachment") then
+        pos = anchor.WorldPosition
+
+    else
+        local ok,pivot = pcall(function()
+            return modelo:GetPivot()
+        end)
+
+        if ok then
+            pos = pivot.Position
+        end
+    end
+
+    return prompt,pos
+end
+
+local function procurarOvo(posicao)
+    local pasta =
+        workspace:FindFirstChild("Eggs")
+
+    if not pasta then return nil end
+
+    local melhor = nil
+    local menor = distanciaRadar
+
+    for _,modelo in ipairs(
+        pasta:GetDescendants()
+    ) do
+        if modelo:IsA("Model")
+            and modelo.Name == "SpawnedEgg"
+            and permitido(modelo) then
+
+            local prompt,pos =
+                dadosOvo(modelo)
+
+            if prompt and prompt.Enabled and pos then
+
+                local d =
+                    (pos-posicao).Magnitude
+
+                if d < menor then
+                    menor = d
+
+                    melhor = {
+                        modelo = modelo,
+                        prompt = prompt,
+                        pos = pos
+                    }
+                end
+            end
+        end
+    end
+
     return melhor
 end
 
 -- DETECTAR OVO NA MAO
 
-local function botaoSoltarVisivel()
-    for _,v in ipairs(pg:GetDescendants()) do
-        if v:IsA("GuiButton")
-            and not v:IsDescendantOf(gui) then
+local function soltarVisivel()
+    for _,obj in ipairs(pg:GetDescendants()) do
 
-            local nome = normalizar(v.Name)
-            local t = v:IsA("TextButton")
-                and normalizar(v.Text) or ""
+        if obj:IsA("TextButton")
+            or obj:IsA("ImageButton") then
 
-            if nome:find("drop",1,true)
-                or nome:find("soltar",1,true)
-                or t:find("drop",1,true)
-                or t:find("soltar",1,true) then
+            if not obj:IsDescendantOf(gui) then
 
-                local visivel = v.Visible
-                local pai = v.Parent
+                local t = normalizar(
+                    obj.Name.." "..
+                    (obj:IsA("TextButton")
+                        and obj.Text or "")
+                )
 
-                while visivel and pai do
-                    if pai:IsA("GuiObject") and not pai.Visible then
-                        visivel = false
+                if t:find("soltar",1,true)
+                    or t:find("drop",1,true) then
+
+                    local visivel = obj.Visible
+                    local pai = obj.Parent
+
+                    while visivel and pai
+                        and pai ~= pg do
+
+                        if pai:IsA("GuiObject")
+                            and not pai.Visible then
+                            visivel = false
+                        end
+
+                        pai = pai.Parent
                     end
-                    if pai:IsA("ScreenGui") and not pai.Enabled then
-                        visivel = false
+
+                    if visivel then
+                        return true
                     end
-                    pai = pai.Parent
                 end
-
-                if visivel then return true end
             end
         end
     end
+
     return false
 end
 
--- CONTROLE
-
 local function valido(id)
-    return not encerrado
-        and ativo
+    return ativo
         and sessao == id
         and gui.Parent ~= nil
 end
 
 local function esperar(t,id)
-    local fim = os.clock()+t
-    while os.clock()<fim do
-        if not valido(id) then return false end
-        task.wait(.05)
+    local inicio = os.clock()
+
+    while os.clock()-inicio < t do
+        if not valido(id) then
+            return false
+        end
+
+        task.wait(.1)
     end
-    return valido(id)
+
+    return true
 end
 
--- TELEPORTE
+local function teleportar(pos,id)
+    if not valido(id) then
+        return false
+    end
 
-local function teleportar(ponto,id)
     local r = root()
-    if not r or not valido(id) then return false end
 
-    r.CFrame = CFrame.new(ponto+Vector3.new(0,3,0))
-    r.AssemblyLinearVelocity = Vector3.zero
-    r.AssemblyAngularVelocity = Vector3.zero
+    if not r then
+        return false
+    end
+
+    r.CFrame = CFrame.new(
+        pos+Vector3.new(0,3,0)
+    )
 
     return esperar(velocidadeTP,id)
 end
 
--- COLETAR
+local function coletar(ovo,id)
+    if not valido(id) then
+        return false
+    end
 
-local function coletar(prompt,id)
-    if not prompt or not valido(id) then return false end
+    atualizar("Coletando ovo")
 
     if type(fireproximityprompt) ~= "function" then
-        atualizar("Prompt indisponivel")
+        atualizar("Prompt indisponível")
         return false
     end
 
     local ok = pcall(function()
-        fireproximityprompt(prompt)
+        fireproximityprompt(ovo.prompt)
     end)
 
-    if not ok then return false end
-
-    local limite = os.clock()+7
-    while os.clock()<limite do
-        if not valido(id) then return false end
-        if botaoSoltarVisivel() then return true end
-        task.wait(.1)
+    if not ok then
+        return false
     end
-    return false
-end
 
--- ENTREGA NA BASE
+    local inicio = os.clock()
 
-local function entregarNaBase(id)
-    if not base or not valido(id) then return false end
-
-    local r = root()
-    if not r then return false end
-
-    atualizar("Levando ovo para base")
-    r.CFrame = base
-    r.AssemblyLinearVelocity = Vector3.zero
-    r.AssemblyAngularVelocity = Vector3.zero
-
-    if not esperar(.5,id) then return false end
-
-    local limite = os.clock()+15
-    local sumiuDesde = nil
-
-    while os.clock()<limite do
-        if not valido(id) then return false end
-
-        if not botaoSoltarVisivel() then
-            sumiuDesde = sumiuDesde or os.clock()
-
-            if os.clock()-sumiuDesde >= .6 then
-                entregas += 1
-                contador.Text = "Ovos coletados: "..entregas
-                atualizar("Ovo depositado")
-                return true
-            end
-        else
-            sumiuDesde = nil
-            atualizar("Aguardando deposito")
+    while os.clock()-inicio < 7 do
+        if not valido(id) then
+            return false
         end
 
-        task.wait(.1)
+        if soltarVisivel() then
+            return true
+        end
+
+        task.wait(.2)
     end
-    atualizar("Entrega nao confirmada")
+
     return false
 end
 
--- ATIVAR AUTO FARM
+local function entregar(id)
+    if not base then
+        return false
+    end
 
-toggle.MouseButton1Click:Connect(function()
-    if not ativo and not base then
-        atualizar("Salve a base primeiro")
+    atualizar("Levando ovo para base")
+
+    local r = root()
+
+    if not r then
+        return false
+    end
+
+    r.CFrame = base
+
+    if not esperar(velocidadeTP,id) then
+        return false
+    end
+
+    local inicio = os.clock()
+
+    while os.clock()-inicio < 15 do
+        if not valido(id) then
+            return false
+        end
+
+        if not soltarVisivel() then
+            if esperar(.6,id)
+                and not soltarVisivel() then
+
+                entregas = entregas+1
+
+                contador.Text =
+                    "Ovos coletados: "..entregas
+
+                atualizar("Ovo entregue")
+                return true
+            end
+        end
+
+        task.wait(.2)
+    end
+
+    atualizar("Entrega não confirmada")
+    return false
+end
+
+-- LOOP DO AUTO FARM
+
+local function iniciarFarm(id)
+    task.spawn(function()
+
+        while valido(id) do
+
+            for _,ponto in ipairs(pontos) do
+
+                if not valido(id) then
+                    break
+                end
+
+                atualizar("Procurando ovos")
+
+                if not teleportar(ponto,id) then
+                    break
+                end
+
+                local ovo = procurarOvo(ponto)
+
+                if ovo and valido(id) then
+
+                    if teleportar(ovo.pos,id) then
+
+                        if coletar(ovo,id) then
+
+                            if levarBase then
+                                entregar(id)
+                            else
+                                atualizar(
+                                    "Ovo coletado na mão"
+                                )
+
+                                -- Evita procurar outro
+                                -- enquanto segura um ovo
+                                while valido(id)
+                                    and soltarVisivel() do
+                                    task.wait(.3)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            if valido(id) then
+                esperar(.5,id)
+            end
+        end
+    end)
+end
+
+conectar(farmBotao.MouseButton1Click,function()
+
+    if not ativo and levarBase and not base then
+        atualizar("Salve sua base primeiro")
         return
     end
 
     ativo = not ativo
-    sessao += 1
+    sessao = sessao+1
 
-    toggle.Text = ativo
+    farmBotao.Text = ativo
         and "Auto Farm: ON"
         or "Auto Farm: OFF"
 
-    toggle.BackgroundColor3 =
-        ativo and roxo or fundo
-
-    atualizar(ativo
-        and "Procurando ovos"
-        or "Desativado")
-end)
-
--- CICLO PRINCIPAL
-
-task.spawn(function()
-    while not encerrado and gui.Parent do
-        if ativo then
-            local id = sessao
-            local ignorados = {}
-
-            for i,ponto in ipairs(coordenadas) do
-                if not valido(id) then break end
-
-                if botaoSoltarVisivel() then
-                    if not entregarNaBase(id) then break end
-                end
-
-                atualizar("Area "..i.."/"..#coordenadas)
-
-                if not teleportar(ponto,id) then break end
-
-                local ovo = procurarNaArea(ponto,ignorados)
-
-                if ovo and valido(id) then
-                    atualizar("Ovo localizado")
-
-                    if teleportar(posicao(ovo),id) then
-                        atualizar("Coletando ovo")
-                        local prompt = promptDoOvo(ovo)
-
-                        if coletar(prompt,id) then
-                            atualizar("Ovo na mao")
-
-                            if levarBase then
-                                if not entregarNaBase(id) then
-                                    break
-                                end
-                            else
-                                atualizar("Ovo coletado")
-                            end
-                        else
-                            atualizar("Coleta nao confirmada")
-                        end
-                    end
-
-                    ignorados[ovo] = true
-                end
-            end
-        else
-            task.wait(.25)
-        end
-        task.wait(.1)
+    if ativo then
+        iniciarFarm(sessao)
+    else
+        atualizar("Auto Farm desligado")
     end
 end)
+
+-- AJUSTAR TAMANHO DO PAINEL
+
+local ajustar = botao(
+    "↕",
+    UDim2.fromScale(.91,.89),
+    UDim2.fromScale(.055,.085),
+    conteudo
+)
+
+local redimensionando = false
+local inicioToque = nil
+local escalaInicial = escala.Scale
+
+conectar(ajustar.InputBegan,function(input)
+    if input.UserInputType ==
+        Enum.UserInputType.Touch
+        or input.UserInputType ==
+        Enum.UserInputType.MouseButton1 then
+
+        redimensionando = true
+        inicioToque = input.Position
+        escalaInicial = escala.Scale
+    end
+end)
+
+conectar(UIS.InputChanged,function(input)
+    if not redimensionando
+        or not inicioToque then
+        return
+    end
+
+    if input.UserInputType ==
+        Enum.UserInputType.Touch
+        or input.UserInputType ==
+        Enum.UserInputType.MouseMovement then
+
+        local delta =
+            input.Position.Y-inicioToque.Y
+
+        escala.Scale = math.clamp(
+            escalaInicial+delta/350,
+            .35,1.2
+        )
+    end
+end)
+
+conectar(UIS.InputEnded,function(input)
+    if input.UserInputType ==
+        Enum.UserInputType.Touch
+        or input.UserInputType ==
+        Enum.UserInputType.MouseButton1 then
+
+        redimensionando = false
+        inicioToque = nil
+    end
+end)
+
+-- FECHAR TUDO
+
+local function pararTudo()
+    if encerrado then return end
+
+    encerrado = true
+    ativo = false
+    sessao = sessao+1
+    otimizar = false
+
+    pararDesync()
+    restaurarOtimizacao()
+
+    for _,c in ipairs(conexoes) do
+        c:Disconnect()
+    end
+
+    gui:Destroy()
+end
+
+env.BlackzinnmdmParar = pararTudo
+
+conectar(fechar.MouseButton1Click,pararTudo)
