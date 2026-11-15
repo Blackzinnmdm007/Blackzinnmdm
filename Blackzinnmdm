@@ -1,6 +1,7 @@
 
 -- BLACKZINNMDM V12.7
--- AUTO FARM / BASE / RARIDADES / COLOSSAL / OTIMIZACAO
+-- LAYOUT OBSIDIAN ROYAL (PRETO E PRATA)
+-- AUTO FARM / BASE FIXA / RARIDADES / COLOSSAL / OTIMIZACAO
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -21,7 +22,6 @@ if anterior then anterior:Destroy() end
 local velocidadeBusca = 0.25
 local velocidadeTP = 1.10
 local distanciaRadar = 500
-local imagem = "rbxassetid://77905657296524"
 
 local ativo = false
 local otimizar = false
@@ -29,7 +29,7 @@ local levarBase = true
 local ignorarChocando = true
 local encerrado = false
 
-local base = nil
+local base = CFrame.new(24.713, 3.000, 86.558)
 local sessao = 0
 local entregas = 0
 local conexoes = {}
@@ -96,328 +96,220 @@ local function normalizar(t)
     return t
 end
 
--- INTERFACE
-local roxo = Color3.fromRGB(175,35,255)
-local escuro = Color3.fromRGB(20,8,35)
+-- INTERFACE OBSIDIAN: PRETO, GRAFITE E PRATA
+local roxo = Color3.fromRGB(232,237,246)
+local escuro = Color3.fromRGB(7,8,11)
+local branco = Color3.fromRGB(31,35,43)
+local tinta = Color3.fromRGB(244,247,252)
+local cinza = Color3.fromRGB(235,239,247)
+local borda = Color3.fromRGB(165,174,188)
+local azul = Color3.fromRGB(190,200,216)
 
-local function estilizar(obj)
-    criar("UICorner",{
-        CornerRadius = UDim.new(0,9)
-    },obj)
-
-    criar("UIStroke",{
-        Color = roxo,
-        Thickness = 1.5
-    },obj)
+local function cantos(obj,raio)
+    criar("UICorner",{CornerRadius=UDim.new(0,raio or 10)},obj)
 end
-
+local function estilizar(obj)
+    cantos(obj,10)
+    criar("UIStroke",{Color=borda,Thickness=1.4},obj)
+    -- Sem UIGradient nos botoes: o gradiente escurecia tambem as letras
+end
 local function botao(nome,pos,tamanho,pai)
     local b = criar("TextButton",{
-        Text = nome,
-        Position = pos,
-        Size = tamanho,
-        BackgroundColor3 = escuro,
-        TextColor3 = Color3.new(1,1,1),
-        Font = Enum.Font.GothamBold,
-        TextSize = 14,
-        TextWrapped = true,
-        ZIndex = 5
+        Text=nome,Position=pos,Size=tamanho,
+        BackgroundColor3=branco,TextColor3=tinta,
+        Font=Enum.Font.GothamBold,TextSize=16,
+        TextTransparency=0,TextStrokeTransparency=0.55,
+        TextStrokeColor3=Color3.fromRGB(0,0,0),
+        TextWrapped=true,AutoButtonColor=true,ZIndex=5
     },pai)
     estilizar(b)
     return b
 end
-
 local function texto(nome,pos,tamanho,pai,sz)
     return criar("TextLabel",{
-        Text = nome,
-        Position = pos,
-        Size = tamanho,
-        BackgroundTransparency = 1,
-        TextColor3 = Color3.new(1,1,1),
-        Font = Enum.Font.GothamBold,
-        TextSize = sz or 14,
-        TextWrapped = true,
-        ZIndex = 5
+        Text=nome,Position=pos,Size=tamanho,
+        BackgroundTransparency=1,TextColor3=tinta,
+        Font=Enum.Font.GothamBold,TextSize=sz or 15,
+        TextTransparency=0,TextStrokeTransparency=0.65,
+        TextStrokeColor3=Color3.fromRGB(0,0,0),
+        TextWrapped=true,ZIndex=5
     },pai)
 end
-
 local gui = criar("ScreenGui",{
-    Name = "Blackzinnmdm",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    Name="Blackzinnmdm",ResetOnSpawn=false,
+    IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 },pg)
-
 local frame = criar("Frame",{
-    Size = UDim2.fromOffset(560,350),
-    AnchorPoint = Vector2.new(.5,.5),
-    Position = UDim2.fromScale(.5,.5),
-    BackgroundTransparency = 1,
-    Active = true,
-    Draggable = true
+    Size=UDim2.fromOffset(560,390),
+    AnchorPoint=Vector2.new(.5,.5),
+    Position=UDim2.fromScale(.5,.5),
+    BackgroundColor3=escuro,
+    Active=true,Draggable=true
 },gui)
-
+cantos(frame,17)
+criar("UIStroke",{Color=Color3.fromRGB(224,232,244),Thickness=2.6},frame)
+criar("UIGradient",{Color=ColorSequence.new(Color3.fromRGB(31,34,40),Color3.fromRGB(8,10,13)),Rotation=90},frame)
 local escala = criar("UIScale",{Scale=.8},frame)
-
 local camInicial = workspace.CurrentCamera
 if camInicial then
-    local v = camInicial.ViewportSize
-    escala.Scale = math.clamp(
-        math.min(.8,(v.X-20)/560,(v.Y-20)/350),
-        .4,.8
-    )
+    local v=camInicial.ViewportSize
+    escala.Scale=math.clamp(math.min(.9,(v.X-22)/560,(v.Y-22)/390),.4,.9)
 end
-
-criar("ImageLabel",{
-    Size = UDim2.fromScale(1,1),
-    BackgroundTransparency = 1,
-    Image = imagem,
-    ScaleType = Enum.ScaleType.Stretch,
-    ZIndex = 1
-},frame)
-
 local conteudo = criar("Frame",{
-    Size = UDim2.fromScale(1,1),
-    BackgroundTransparency = 1,
-    ZIndex = 2
+    Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=2
 },frame)
-
-texto(
-    "SWING FOR EGG",
-    UDim2.fromScale(.30,.07),
-    UDim2.fromScale(.49,.10),
-    conteudo,21
-)
-
-texto(
-    "BLACKZINNMDM V12.7",
-    UDim2.fromScale(.36,.17),
-    UDim2.fromScale(.36,.06),
-    conteudo,12
-)
-
-local icone = botao(
-    "🥚",
-    UDim2.new(0,12,.15,0),
-    UDim2.fromOffset(48,48),
-    gui
-)
-icone.TextSize = 26
-icone.Active = true
-icone.Draggable = true
-
-conectar(icone.MouseButton1Click,function()
-    frame.Visible = not frame.Visible
-end)
-
-local minimizar = botao(
-    "−",
-    UDim2.fromScale(.83,.06),
-    UDim2.fromScale(.055,.09),
-    conteudo
-)
-
-local fechar = botao(
-    "X",
-    UDim2.fromScale(.90,.06),
-    UDim2.fromScale(.055,.09),
-    conteudo
-)
-
-conectar(minimizar.MouseButton1Click,function()
-    frame.Visible = false
-end)
-
--- ABAS
-local nomes = {
-    "Auto Farm",
-    "Base / TP",
-    "Raridades",
-    "Outros"
-}
-
-local paginas = {}
-local abas = {}
-
+local topo = criar("Frame",{
+    Size=UDim2.new(1,-20,0,56),Position=UDim2.fromOffset(10,8),
+    BackgroundColor3=branco,ZIndex=3
+},conteudo)
+cantos(topo,12)
+texto("♛  BLACKZINNMDM  |  V12.7",UDim2.fromOffset(13,4),UDim2.fromOffset(350,42),topo,19).TextXAlignment=Enum.TextXAlignment.Left
+local icone = botao("B",UDim2.new(0,15,.25,0),UDim2.fromOffset(48,48),gui)
+icone.BackgroundColor3=Color3.fromRGB(10,11,14);icone.TextColor3=tinta;icone.TextSize=26
+icone.Active=true;icone.Draggable=true
+conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
+local nomes={"◉  Auto Farm","▤  Raridades","⚙  Outros"}
+local paginas,abas={},{}
 for i,nome in ipairs(nomes) do
-    local b = botao(
-        nome,
-        UDim2.fromScale(.09,.27+(i-1)*.125),
-        UDim2.fromScale(.22,.105),
-        conteudo
-    )
-
-    abas[i] = b
-    paginas[i] = criar("Frame",{
-        Position = UDim2.fromScale(.34,.275),
-        Size = UDim2.fromScale(.59,.52),
-        BackgroundTransparency = 1,
-        Visible = i == 1,
-        ZIndex = 3
+    local x=12+(i-1)*180
+    local b=botao(nome,UDim2.fromOffset(x,73),UDim2.fromOffset(172,46),conteudo)
+    b.TextSize=17
+    abas[i]=b
+    paginas[i]=criar("Frame",{
+        Position=UDim2.fromOffset(12,128),
+        Size=UDim2.fromOffset(536,207),
+        BackgroundColor3=branco,Visible=i==1,ZIndex=3
     },conteudo)
-
+    cantos(paginas[i],12)
     conectar(b.MouseButton1Click,function()
         for j,p in ipairs(paginas) do
-            p.Visible = i == j
-            abas[j].BackgroundColor3 =
-                i == j and roxo or escuro
+            p.Visible=i==j
+            abas[j].BackgroundColor3=(i==j) and Color3.fromRGB(85,92,105) or branco
+            abas[j].TextColor3=tinta
         end
     end)
 end
-
-abas[1].BackgroundColor3 = roxo
-
-local status = texto(
-    "Status: Aguardando...",
-    UDim2.fromScale(.34,.86),
-    UDim2.fromScale(.36,.07),
-    conteudo,12
-)
-
-local contador = texto(
-    "Ovos coletados: 0",
-    UDim2.fromScale(.70,.86),
-    UDim2.fromScale(.25,.07),
-    conteudo,12
-)
-
+abas[1].BackgroundColor3=Color3.fromRGB(85,92,105);abas[1].TextColor3=tinta
+local status=texto("Status: Desativado",UDim2.fromOffset(18,346),UDim2.fromOffset(385,25),conteudo,14)
+status.TextXAlignment=Enum.TextXAlignment.Left
+local contador=texto("Ovos coletados: 0",UDim2.fromOffset(390,346),UDim2.fromOffset(145,25),conteudo,14)
 local function atualizar(msg)
-    if status.Parent then
-        status.Text = "Status: "..msg
-    end
+    if status.Parent then status.Text="Status: "..msg end
 end
 
--- AUTO FARM
-local farmPage = paginas[1]
+-- ABA AUTO FARM: APENAS COLETA, BASE FIXA
+local farmPage=paginas[1]
+texto("◉  AUTO FARM",UDim2.fromOffset(14,10),UDim2.fromOffset(500,32),farmPage,17).TextXAlignment=Enum.TextXAlignment.Left
+local farmBotao=botao("◉  Auto Farm (Pegar Ovos): OFF",UDim2.fromOffset(15,75),UDim2.fromOffset(506,62),farmPage)
+farmBotao.BackgroundColor3=Color3.fromRGB(63,69,79)
+farmBotao.TextColor3=tinta
+farmBotao.TextSize=19
+criar("UIStroke",{Color=Color3.fromRGB(230,236,247),Thickness=2},farmBotao)
+local baseInfo=texto("⌖  Base fixa: 24.713, 3.000, 86.558",UDim2.fromOffset(16,153),UDim2.fromOffset(500,33),farmPage,13)
+baseInfo.TextColor3=cinza
 
-texto(
-    "AUTO FARM",
-    UDim2.fromScale(.02,.02),
-    UDim2.fromScale(.96,.17),
-    farmPage,19
-)
-
-local farmBotao = botao(
-    "Auto Farm: OFF",
-    UDim2.fromScale(.03,.30),
-    UDim2.fromScale(.94,.27),
-    farmPage
-)
-
--- BASE
-local basePage = paginas[2]
-
-texto(
-    "BASE / TP",
-    UDim2.fromScale(.02,.02),
-    UDim2.fromScale(.96,.17),
-    basePage,19
-)
-
-local salvar = botao(
-    "Salvar Base",
-    UDim2.fromScale(.03,.24),
-    UDim2.fromScale(.94,.23),
-    basePage
-)
-
-local voltar = botao(
-    "TP Base",
-    UDim2.fromScale(.03,.53),
-    UDim2.fromScale(.94,.23),
-    basePage
-)
-
-conectar(salvar.MouseButton1Click,function()
-    local r = root()
-    if r then
-        base = r.CFrame
-        atualizar("Base salva")
-    end
-end)
-
-conectar(voltar.MouseButton1Click,function()
-    local r = root()
-    if r and base then
-        r.CFrame = base
-        atualizar("Teleportado para base")
-    end
-end)
-
--- RARIDADES
-local rarPage = paginas[3]
-
-texto(
-    "RARIDADES",
-    UDim2.fromScale(.02,.02),
-    UDim2.fromScale(.96,.17),
-    rarPage,19
-)
-
+-- ABA RARIDADES
+local rarPage=paginas[2]
+texto("▤  FILTROS DE OVOS",UDim2.fromOffset(14,5),UDim2.fromOffset(500,27),rarPage,17).TextXAlignment=Enum.TextXAlignment.Left
 for i,dados in ipairs({
-    {"Segredo","segredo"},
-    {"Eterno","eterno"},
-    {"Divino","divino"},
-    {"Colossal","colossal"}
+    {"Segredo","segredo"},{"Eterno","eterno"},
+    {"Divino","divino"},{"Colossal","colossal"}
 }) do
-    local nome,chave = dados[1],dados[2]
-    local b = botao(
-        "[X] "..nome,
-        UDim2.fromScale(.03,.20+(i-1)*.195),
-        UDim2.fromScale(.94,.175),
-        rarPage
-    )
-
+    local nome,chave=dados[1],dados[2]
+    local x=(i%2==1) and 15 or 274
+    local y=(i<=2) and 43 or 112
+    local b=botao("[X] "..nome.."  ON",UDim2.fromOffset(x,y),UDim2.fromOffset(246,53),rarPage)
     conectar(b.MouseButton1Click,function()
-        filtros[chave] = not filtros[chave]
-        b.Text =
-            (filtros[chave] and "[X] " or "[ ] ")..nome
+        filtros[chave]=not filtros[chave]
+        b.Text=(filtros[chave] and "[X] " or "[ ] ")..nome..(filtros[chave] and "  ON" or "  OFF")
+        b.BackgroundColor3=filtros[chave] and Color3.fromRGB(64,71,82) or branco
     end)
 end
 
--- OUTROS
-local outrosPage = paginas[4]
+-- ABA OUTROS
+local outrosPage=paginas[3]
+texto("⚙  OUTRAS FUNÇÕES",UDim2.fromOffset(14,4),UDim2.fromOffset(500,28),outrosPage,17).TextXAlignment=Enum.TextXAlignment.Left
+local bOtimizar=botao("[ ] Otimização (FPS)",UDim2.fromOffset(15,45),UDim2.fromOffset(506,55),outrosPage)
+local bDesync=botao("[ ] Desync (Clone na Base)",UDim2.fromOffset(15,115),UDim2.fromOffset(506,55),outrosPage)
+bDesync.TextColor3=tinta
+bDesync.TextSize=17
 
-texto(
-    "OUTROS",
-    UDim2.fromScale(.02,.01),
-    UDim2.fromScale(.96,.14),
-    outrosPage,18
-)
-
-local bLevar = botao(
-    "[X] Levar ovo para a base",
-    UDim2.fromScale(.03,.17),
-    UDim2.fromScale(.94,.17),
-    outrosPage
-)
-
-local bIgnorar = botao(
-    "[X] Ignorar ovos chocando",
-    UDim2.fromScale(.03,.37),
-    UDim2.fromScale(.94,.17),
-    outrosPage
-)
-
-local bOtimizar = botao(
-    "[ ] Otimização",
-    UDim2.fromScale(.03,.57),
-    UDim2.fromScale(.94,.17),
-    outrosPage
-)
-
-conectar(bLevar.MouseButton1Click,function()
-    levarBase = not levarBase
-    bLevar.Text =
-        (levarBase and "[X] " or "[ ] ")
-        .."Levar ovo para a base"
+-- CLONE VISUAL LOCAL NA BASE, CAMERA ACOMPANHA O CLONE
+local cloneBase=nil
+local function cameraOriginal()
+    local camera=workspace.CurrentCamera
+    local char=player.Character
+    local hum=char and char:FindFirstChildOfClass("Humanoid")
+    if camera and hum then
+        camera.CameraType=Enum.CameraType.Custom
+        camera.CameraSubject=hum
+    end
+end
+local function desligarClone()
+    cameraOriginal()
+    if cloneBase then
+        cloneBase:Destroy()
+        cloneBase=nil
+    end
+    if bDesync.Parent then
+        bDesync.Text="[ ] Desync (Clone na Base)"
+        bDesync.BackgroundColor3=branco
+    end
+end
+local function ligarClone()
+    local char=player.Character
+    local hum=char and char:FindFirstChildOfClass("Humanoid")
+    if not char or not hum then
+        atualizar("Personagem nao encontrado")
+        return
+    end
+    local anterior=char.Archivable
+    char.Archivable=true
+    local ok,copia=pcall(function() return char:Clone() end)
+    char.Archivable=anterior
+    if not ok or not copia then
+        atualizar("Falha ao criar clone")
+        return
+    end
+    for _,obj in ipairs(copia:GetDescendants()) do
+        if obj:IsA("BaseScript") then
+            obj:Destroy()
+        elseif obj:IsA("BasePart") then
+            obj.Anchored=true
+            obj.CanCollide=false
+            obj.CanTouch=false
+            obj.CanQuery=false
+        end
+    end
+    copia.Name="BlackzinnCloneLocal"
+    copia.Parent=workspace
+    copia:PivotTo(CFrame.new(24.713,3.000,86.558))
+    local humanoidClone=copia:FindFirstChildOfClass("Humanoid")
+    if not humanoidClone then
+        copia:Destroy()
+        atualizar("Clone sem Humanoid")
+        return
+    end
+    cloneBase=copia
+    local camera=workspace.CurrentCamera
+    if camera then
+        camera.CameraType=Enum.CameraType.Custom
+        camera.CameraSubject=humanoidClone
+    end
+    bDesync.Text="[X] Desync (Clone na Base)"
+    bDesync.BackgroundColor3=Color3.fromRGB(85,92,105)
+    atualizar("Camera no clone; Auto Farm segue no personagem")
+end
+conectar(bDesync.MouseButton1Click,function()
+    if cloneBase then
+        desligarClone()
+        atualizar("Clone desativado")
+    else
+        ligarClone()
+    end
 end)
-
-conectar(bIgnorar.MouseButton1Click,function()
-    ignorarChocando = not ignorarChocando
-    bIgnorar.Text =
-        (ignorarChocando and "[X] " or "[ ] ")
-        .."Ignorar ovos chocando"
+conectar(player.CharacterAdded,function()
+    desligarClone()
 end)
 
 -- OTIMIZACAO
@@ -475,11 +367,11 @@ conectar(bOtimizar.MouseButton1Click,function()
     otimizar = not otimizar
     if otimizar then
         aplicarOtimizacao()
-        bOtimizar.Text = "[X] Otimização"
+        bOtimizar.Text = "[X] Otimização (FPS)"
         atualizar("Otimização ativada")
     else
         restaurarOtimizacao()
-        bOtimizar.Text = "[ ] Otimização"
+        bOtimizar.Text = "[ ] Otimização (FPS)"
         atualizar("Otimização desativada")
     end
 end)
@@ -793,19 +685,16 @@ local function iniciarFarm(id)
 end
 
 conectar(farmBotao.MouseButton1Click,function()
-    if not ativo and levarBase and not base then
-        atualizar("Salve sua base primeiro")
-        return
-    end
-
     ativo = not ativo
     sessao = sessao+1
 
     farmBotao.Text = ativo
-        and "Auto Farm: ON"
-        or "Auto Farm: OFF"
+        and "◉  Auto Farm (Pegar Ovos): ON"
+        or "◉  Auto Farm (Pegar Ovos): OFF"
+    farmBotao.BackgroundColor3 = ativo and Color3.fromRGB(70,77,88) or Color3.fromRGB(38,42,49)
 
     if ativo then
+        atualizar("Ativado")
         iniciarFarm(sessao)
     else
         atualizar("Auto Farm desligado")
@@ -815,8 +704,8 @@ end)
 -- REDIMENSIONAR
 local ajustar = botao(
     "↕",
-    UDim2.fromScale(.91,.89),
-    UDim2.fromScale(.055,.085),
+    UDim2.fromOffset(519,350),
+    UDim2.fromOffset(28,28),
     conteudo
 )
 
@@ -872,6 +761,7 @@ local function pararTudo()
     otimizar = false
 
     restaurarOtimizacao()
+    desligarClone()
 
     for _,c in ipairs(conexoes) do
         c:Disconnect()
@@ -881,5 +771,3 @@ local function pararTudo()
 end
 
 env.BlackzinnmdmParar = pararTudo
-
-conectar(fechar.MouseButton1Click,pararTudo)
