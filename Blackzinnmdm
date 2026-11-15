@@ -1,5 +1,5 @@
 
--- BLACKZINNMDM V12.1
+-- BLACKZINNMDM V12.2
 -- AUTO FARM + DESYNC + OTIMIZACAO
 -- ANDROID / DELTA
 
@@ -20,7 +20,7 @@ if antigo then antigo:Destroy() end
 
 -- CONFIGURACOES
 
-local velocidadeBusca = 0.95
+local velocidadeBusca = 0.45
 local velocidadeTP = 1.10
 local distanciaRadar = 500
 local imagem = "rbxassetid://77905657296524"
@@ -76,11 +76,9 @@ end
 
 local function criar(tipo, props, pai)
     local obj = Instance.new(tipo)
-
     for k,v in pairs(props) do
         obj[k] = v
     end
-
     obj.Parent = pai
     return obj
 end
@@ -207,7 +205,7 @@ texto(
 )
 
 texto(
-    "BLACKZINNMDM V12.1",
+    "BLACKZINNMDM V12.2",
     UDim2.fromScale(.36,.17),
     UDim2.fromScale(.36,.06),
     conteudo,12
@@ -1078,7 +1076,7 @@ local function entregar(id)
 end
 
 -- AUTO FARM
--- BUSCA MAIS RAPIDA: 0.95 SEGUNDO
+-- BUSCA: 0.45 SEGUNDO
 -- COLETA E ENTREGA: 1.10 SEGUNDO
 
 local function iniciarFarm(id)
@@ -1089,7 +1087,6 @@ local function iniciarFarm(id)
 
                 atualizar("Procurando ovos")
 
-                -- VELOCIDADE EXCLUSIVA DA BUSCA
                 if not teleportar(
                     ponto,id,velocidadeBusca
                 ) then
