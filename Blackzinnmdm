@@ -49,6 +49,9 @@ local autoSave = true
 local configAnterior = {}
 local desyncDesejado = false
 local farmDesejado = false
+local autoHop = false
+local ultimaTentativaHop = 0
+local intervaloAutoHop = 4 -- segundos entre tentativas; evita spam se o teleporte falhar
 
 local function salvarConfig()
     if not autoSave or type(writefile) ~= "function" then return end
@@ -57,6 +60,7 @@ local function salvarConfig()
         autoFarm = ativo,
         otimizar = otimizar,
         desync = desyncDesejado,
+        autoHop = autoHop,
         filtros = filtros
     }
     pcall(function()
@@ -73,6 +77,7 @@ if type(readfile) == "function" then
         if type(dados.autoSave) == "boolean" then autoSave = dados.autoSave end
         if type(dados.autoFarm) == "boolean" then farmDesejado = dados.autoFarm end
         if type(dados.desync) == "boolean" then desyncDesejado = dados.desync end
+        if type(dados.autoHop) == "boolean" then autoHop = dados.autoHop end
         if type(dados.filtros) == "table" then
             for k in pairs(filtros) do
                 if type(dados.filtros[k]) == "boolean" then
@@ -221,17 +226,9 @@ local icone = botao("B",UDim2.new(0,15,.25,0),UDim2.fromOffset(48,48),gui)
 icone.BackgroundColor3=Color3.fromRGB(38,12,52);icone.TextColor3=Color3.fromRGB(246,198,255);icone.TextSize=26
 icone.Active=true;icone.Draggable=true
 conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
--- HOP V2: tenta servidor aleatorio; se HTTP falhar, usa Teleport normal.
--- Teleport normal pode retornar ao mesmo servidor e nao garante aleatoriedade.
+-- AUTO HOP: sem botao manual flutuante.
+-- O teleporte e iniciado automaticamente apos a varredura e verificacao do filtro.
 local TeleportService = game:GetService("TeleportService")
-local hop = botao("HOP", UDim2.new(1,-125,.29,0), UDim2.fromOffset(64,50), gui)
-hop.Name = "HOP"
-hop.BackgroundColor3 = Color3.fromRGB(40,14,54)
-hop.TextColor3 = Color3.fromRGB(255,255,255)
-hop.TextSize = 19
-hop.Active = true
-hop.Draggable = true
-
 local hopOcupado = false
 local function obterHTTP()
     local candidatos = {
@@ -273,15 +270,13 @@ local function escolherServidor()
     return lista[math.random(1,#lista)]
 end
 
-conectar(hop.MouseButton1Click, function()
-    if hopOcupado then return end
+local function executarHop(origem)
+    if hopOcupado or encerrado then return false end
     hopOcupado = true
-    hop.Text = "BUSCA"
     task.spawn(function()
         salvarConfig()
         local id, motivo = escolherServidor()
-        if encerrado then return end
-        hop.Text = "ENTRAR"
+        if encerrado then hopOcupado=false; return end
         local ok, err = pcall(function()
             if id then
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, id, player)
@@ -292,28 +287,20 @@ conectar(hop.MouseButton1Click, function()
             end
         end)
         if not ok then
-            warn("[Blackzinnmdm HOP] Teleporte falhou: " .. tostring(err))
-            hop.Text = "ERRO"
+            warn("[Blackzinnmdm HOP] " .. tostring(origem) .. ": " .. tostring(err))
             task.wait(3)
         else
-            -- Se a troca nao ocorrer, permite tentar de novo.
-            task.wait(10)
+            task.wait(6)
         end
-        if not encerrado and hop.Parent then hop.Text = "HOP" end
         hopOcupado = false
     end)
-end)
+    return true
+end
 
 conectar(TeleportService.TeleportInitFailed, function(jogador, resultado, mensagem)
     if jogador ~= player then return end
     warn("[Blackzinnmdm HOP] TeleportInitFailed: " .. tostring(resultado)
         .. " | " .. tostring(mensagem))
-    if not encerrado and hop.Parent then
-        hop.Text = "ERRO"
-        task.delay(3, function()
-            if not encerrado and hop.Parent then hop.Text = "HOP" end
-        end)
-    end
     hopOcupado = false
 end)
 
@@ -396,6 +383,21 @@ conectar(bAutoSave.MouseButton1Click,function()
     atualizarAutoSave()
     if autoSave then salvarConfig() end
     atualizar(autoSave and "Auto Save ativado" or "Auto Save desativado")
+end)
+
+-- AUTO HOP: somente depois de uma varredura completa sem ovos do filtro
+local bAutoHop=botao("",UDim2.fromOffset(15,210),UDim2.fromOffset(506,35),outrosPage)
+bAutoHop.TextSize=15
+local function atualizarAutoHop()
+    bAutoHop.Text = autoHop and "[X] Auto HOP por filtro: ON" or "[ ] Auto HOP por filtro: OFF"
+    bAutoHop.BackgroundColor3 = autoHop and Color3.fromRGB(91,30,125) or branco
+end
+atualizarAutoHop()
+conectar(bAutoHop.MouseButton1Click,function()
+    autoHop = not autoHop
+    atualizarAutoHop()
+    salvarConfig()
+    atualizar(autoHop and "Auto HOP ativado" or "Auto HOP desligado")
 end)
 
 -- CLONE VISUAL LOCAL NA BASE, CAMERA ACOMPANHA O CLONE
@@ -683,6 +685,22 @@ local function procurarOvo(posicao)
     return melhor
 end
 
+-- Checa o mapa inteiro, nao apenas o raio do ponto atual.
+-- Evita trocar de servidor se ainda houver ovos permitidos.
+local function existemOvosDoFiltro()
+    local pasta = workspace:FindFirstChild("Eggs")
+    if not pasta then return nil end -- mapa ainda nao carregado
+    for _,modelo in ipairs(pasta:GetDescendants()) do
+        if modelo:IsA("Model") and modelo.Name == "SpawnedEgg" and permitido(modelo) then
+            local prompt,pos = dadosOvo(modelo)
+            if prompt and prompt.Enabled and pos then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- OVO NA MAO
 local function soltarVisivel()
     for _,obj in ipairs(pg:GetDescendants()) do
@@ -848,7 +866,23 @@ local function iniciarFarm(id)
             end
 
             if valido(id) then
-                esperar(.5,id)
+                -- HOP somente ao concluir a rota; nunca durante coleta ou entrega.
+                if autoHop and not hopOcupado and not soltarVisivel()
+                    and (os.clock() - ultimaTentativaHop) >= intervaloAutoHop then
+                    local encontrados = existemOvosDoFiltro()
+                    if encontrados == false then
+                        -- Aguarda replicacao antes de confirmar ausencia.
+                        atualizar("Sem ovos do filtro; confirmando...")
+                        esperar(.35,id)
+                        if valido(id) and autoHop and not soltarVisivel()
+                            and existemOvosDoFiltro() == false then
+                            ultimaTentativaHop = os.clock()
+                            atualizar("Sem ovos do filtro: Auto HOP")
+                            executarHop("Auto HOP")
+                        end
+                    end
+                end
+                esperar(.1,id)
             end
         end
     end)
@@ -970,3 +1004,4 @@ local function pararTudo()
 end
 
 env.BlackzinnmdmParar = pararTudo
+
