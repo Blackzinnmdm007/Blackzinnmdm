@@ -19,8 +19,8 @@ local anterior = pg:FindFirstChild("Blackzinnmdm")
 if anterior then anterior:Destroy() end
 
 -- CONFIGURACOES
-local velocidadeBusca = 0.25
-local velocidadeTP = 1.10
+local velocidadeBusca = 0.15 -- busca mais rápida; pequena pausa para atualização
+local velocidadeTP = 0.25
 local distanciaRadar = 500
 
 local ativo = false
@@ -137,14 +137,14 @@ local function normalizar(t)
     return t
 end
 
--- INTERFACE OBSIDIAN: PRETO, GRAFITE E PRATA
-local roxo = Color3.fromRGB(232,237,246)
-local escuro = Color3.fromRGB(7,8,11)
-local branco = Color3.fromRGB(31,35,43)
-local tinta = Color3.fromRGB(244,247,252)
-local cinza = Color3.fromRGB(235,239,247)
-local borda = Color3.fromRGB(165,174,188)
-local azul = Color3.fromRGB(190,200,216)
+-- LAYOUT 10: GRAFITE GAMER (PRETO, CINZA E ROXO NEON)
+local roxo = Color3.fromRGB(194,56,255)
+local escuro = Color3.fromRGB(9,9,14)
+local branco = Color3.fromRGB(24,23,32)
+local tinta = Color3.fromRGB(250,246,255)
+local cinza = Color3.fromRGB(188,176,203)
+local borda = Color3.fromRGB(143,54,187)
+local azul = Color3.fromRGB(195,65,250)
 
 local function cantos(obj,raio)
     criar("UICorner",{CornerRadius=UDim.new(0,raio or 10)},obj)
@@ -188,13 +188,25 @@ local frame = criar("Frame",{
     Active=true,Draggable=true
 },gui)
 cantos(frame,17)
-criar("UIStroke",{Color=Color3.fromRGB(224,232,244),Thickness=2.6},frame)
-criar("UIGradient",{Color=ColorSequence.new(Color3.fromRGB(31,34,40),Color3.fromRGB(8,10,13)),Rotation=90},frame)
+criar("UIStroke",{Color=Color3.fromRGB(194,56,255),Thickness=2.6},frame)
+criar("UIGradient",{Color=ColorSequence.new(Color3.fromRGB(33,26,41),Color3.fromRGB(7,7,11)),Rotation=90},frame)
 local escala = criar("UIScale",{Scale=.8},frame)
 local camInicial = workspace.CurrentCamera
 if camInicial then
     local v=camInicial.ViewportSize
     escala.Scale=math.clamp(math.min(.9,(v.X-22)/560,(v.Y-22)/390),.4,.9)
+end
+-- Faixas grafitadas decorativas (sem bloquear cliques)
+for i=1,9 do
+    local faixa=criar("Frame",{
+        Name="GraffitiFaixa"..i,
+        Size=UDim2.fromOffset(20+(i%4)*14,2+(i%2)),
+        Position=UDim2.new(0,10+(i*57)%510,0,16+(i*41)%352),
+        Rotation=(i%2==0) and -22 or 25,
+        BackgroundColor3=(i%3==0) and Color3.fromRGB(122,116,133) or roxo,
+        BackgroundTransparency=.62,
+        BorderSizePixel=0,ZIndex=1
+    },frame)
 end
 local conteudo = criar("Frame",{
     Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=2
@@ -204,9 +216,9 @@ local topo = criar("Frame",{
     BackgroundColor3=branco,ZIndex=3
 },conteudo)
 cantos(topo,12)
-texto("♛  BLACKZINNMDM  |  V12.7",UDim2.fromOffset(13,4),UDim2.fromOffset(350,42),topo,19).TextXAlignment=Enum.TextXAlignment.Left
+texto("♛  BLACKZINNMDM  |  GRAFITE GAMER",UDim2.fromOffset(13,4),UDim2.fromOffset(510,42),topo,19).TextXAlignment=Enum.TextXAlignment.Left
 local icone = botao("B",UDim2.new(0,15,.25,0),UDim2.fromOffset(48,48),gui)
-icone.BackgroundColor3=Color3.fromRGB(10,11,14);icone.TextColor3=tinta;icone.TextSize=26
+icone.BackgroundColor3=Color3.fromRGB(38,12,52);icone.TextColor3=Color3.fromRGB(246,198,255);icone.TextSize=26
 icone.Active=true;icone.Draggable=true
 conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
 -- HOP V2: tenta servidor aleatorio; se HTTP falhar, usa Teleport normal.
@@ -214,7 +226,7 @@ conectar(icone.MouseButton1Click,function() frame.Visible=not frame.Visible end)
 local TeleportService = game:GetService("TeleportService")
 local hop = botao("HOP", UDim2.new(1,-125,.29,0), UDim2.fromOffset(64,50), gui)
 hop.Name = "HOP"
-hop.BackgroundColor3 = Color3.fromRGB(16,18,23)
+hop.BackgroundColor3 = Color3.fromRGB(40,14,54)
 hop.TextColor3 = Color3.fromRGB(255,255,255)
 hop.TextSize = 19
 hop.Active = true
@@ -321,12 +333,12 @@ for i,nome in ipairs(nomes) do
     conectar(b.MouseButton1Click,function()
         for j,p in ipairs(paginas) do
             p.Visible=i==j
-            abas[j].BackgroundColor3=(i==j) and Color3.fromRGB(85,92,105) or branco
+            abas[j].BackgroundColor3=(i==j) and Color3.fromRGB(98,28,135) or branco
             abas[j].TextColor3=tinta
         end
     end)
 end
-abas[1].BackgroundColor3=Color3.fromRGB(85,92,105);abas[1].TextColor3=tinta
+abas[1].BackgroundColor3=Color3.fromRGB(98,28,135);abas[1].TextColor3=tinta
 local status=texto("Status: Desativado",UDim2.fromOffset(18,346),UDim2.fromOffset(385,25),conteudo,14)
 status.TextXAlignment=Enum.TextXAlignment.Left
 local contador=texto("Ovos coletados: 0",UDim2.fromOffset(390,346),UDim2.fromOffset(145,25),conteudo,14)
@@ -338,10 +350,10 @@ end
 local farmPage=paginas[1]
 texto("◉  AUTO FARM",UDim2.fromOffset(14,10),UDim2.fromOffset(500,32),farmPage,17).TextXAlignment=Enum.TextXAlignment.Left
 local farmBotao=botao("◉  Auto Farm (Pegar Ovos): OFF",UDim2.fromOffset(15,75),UDim2.fromOffset(506,62),farmPage)
-farmBotao.BackgroundColor3=Color3.fromRGB(63,69,79)
+farmBotao.BackgroundColor3=Color3.fromRGB(77,26,106)
 farmBotao.TextColor3=tinta
 farmBotao.TextSize=19
-criar("UIStroke",{Color=Color3.fromRGB(230,236,247),Thickness=2},farmBotao)
+criar("UIStroke",{Color=Color3.fromRGB(210,82,255),Thickness=2},farmBotao)
 local baseInfo=texto("⌖  Base fixa: 24.713, 3.000, 86.558",UDim2.fromOffset(16,153),UDim2.fromOffset(500,33),farmPage,13)
 baseInfo.TextColor3=cinza
 
@@ -356,11 +368,11 @@ for i,dados in ipairs({
     local x=(i%2==1) and 15 or 274
     local y=(i<=2) and 43 or 112
     local b=botao((filtros[chave] and "[X] " or "[ ] ")..nome..(filtros[chave] and "  ON" or "  OFF"),UDim2.fromOffset(x,y),UDim2.fromOffset(246,53),rarPage)
-    b.BackgroundColor3=filtros[chave] and Color3.fromRGB(64,71,82) or branco
+    b.BackgroundColor3=filtros[chave] and Color3.fromRGB(91,30,125) or branco
     conectar(b.MouseButton1Click,function()
         filtros[chave]=not filtros[chave]
         b.Text=(filtros[chave] and "[X] " or "[ ] ")..nome..(filtros[chave] and "  ON" or "  OFF")
-        b.BackgroundColor3=filtros[chave] and Color3.fromRGB(64,71,82) or branco
+        b.BackgroundColor3=filtros[chave] and Color3.fromRGB(91,30,125) or branco
         salvarConfig()
     end)
 end
@@ -376,7 +388,7 @@ local bAutoSave=botao("",UDim2.fromOffset(15,174),UDim2.fromOffset(506,28),outro
 bAutoSave.TextSize=15
 local function atualizarAutoSave()
     bAutoSave.Text = autoSave and "[X] Auto Save: ON" or "[ ] Auto Save: OFF"
-    bAutoSave.BackgroundColor3 = autoSave and Color3.fromRGB(64,71,82) or branco
+    bAutoSave.BackgroundColor3 = autoSave and Color3.fromRGB(91,30,125) or branco
 end
 atualizarAutoSave()
 conectar(bAutoSave.MouseButton1Click,function()
@@ -449,7 +461,7 @@ local function ligarClone()
         camera.CameraSubject=humanoidClone
     end
     bDesync.Text="[X] Desync (Clone na Base)"
-    bDesync.BackgroundColor3=Color3.fromRGB(85,92,105)
+    bDesync.BackgroundColor3=Color3.fromRGB(98,28,135)
     atualizar("Camera no clone; Auto Farm segue no personagem")
 end
 conectar(bDesync.MouseButton1Click,function()
@@ -731,6 +743,8 @@ local function teleportar(pos,id,tempo)
         pos+Vector3.new(0,3,0)
     )
 
+    -- Garante pelo menos um ciclo de atualização após o TP.
+    task.wait()
     return esperar(tempo or velocidadeTP,id)
 end
 
@@ -805,7 +819,7 @@ local function iniciarFarm(id)
 
                 atualizar("Procurando ovos")
 
-                -- VELOCIDADE DA BUSCA: 0.25
+                -- BUSCA RAPIDA COM TEMPO PARA ATUALIZAR O MAPA
                 if not teleportar(
                     ponto,id,velocidadeBusca
                 ) then
@@ -847,7 +861,7 @@ conectar(farmBotao.MouseButton1Click,function()
     farmBotao.Text = ativo
         and "◉  Auto Farm (Pegar Ovos): ON"
         or "◉  Auto Farm (Pegar Ovos): OFF"
-    farmBotao.BackgroundColor3 = ativo and Color3.fromRGB(70,77,88) or Color3.fromRGB(38,42,49)
+    farmBotao.BackgroundColor3 = ativo and Color3.fromRGB(95,30,132) or Color3.fromRGB(33,27,40)
 
     salvarConfig()
     if ativo then
@@ -869,7 +883,7 @@ if farmDesejado and autoSave then
         ativo = true
         sessao = sessao + 1
         farmBotao.Text = "◉  Auto Farm (Pegar Ovos): ON"
-        farmBotao.BackgroundColor3 = Color3.fromRGB(70,77,88)
+        farmBotao.BackgroundColor3 = Color3.fromRGB(95,30,132)
         atualizar("Auto Farm restaurado automaticamente")
         salvarConfig()
         iniciarFarm(sessao)
